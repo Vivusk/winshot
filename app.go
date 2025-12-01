@@ -102,6 +102,85 @@ func (a *App) MinimizeToTray() {
 	runtime.WindowHide(a.ctx)
 }
 
+// RegionCaptureData holds the fullscreen screenshot and display info for region selection
+type RegionCaptureData struct {
+	Screenshot  *screenshot.CaptureResult `json:"screenshot"`
+	ScreenX     int                       `json:"screenX"`
+	ScreenY     int                       `json:"screenY"`
+	Width       int                       `json:"width"`
+	Height      int                       `json:"height"`
+	ScaleRatio  float64                   `json:"scaleRatio"`  // DPI scale ratio (physical/logical)
+	PhysicalW   int                       `json:"physicalW"`   // Actual screenshot width
+	PhysicalH   int                       `json:"physicalH"`   // Actual screenshot height
+}
+
+// PrepareRegionCapture prepares for region selection by capturing fullscreen and setting up overlay
+func (a *App) PrepareRegionCapture() (*RegionCaptureData, error) {
+	// Hide the window first so it's not in the screenshot
+	runtime.WindowHide(a.ctx)
+
+	// Wait for window to fully hide
+	time.Sleep(150 * time.Millisecond)
+
+	// Get display bounds
+	bounds := screenshot.GetDisplayBounds(0)
+
+	// Capture fullscreen screenshot
+	result, err := screenshot.CaptureFullscreen()
+	if err != nil {
+		// Show window again on error
+		runtime.WindowShow(a.ctx)
+		return nil, err
+	}
+
+	// Position window at screen origin and make it cover the full screen
+	runtime.WindowSetPosition(a.ctx, bounds.Min.X, bounds.Min.Y)
+
+	// Disable min size constraint temporarily
+	runtime.WindowSetMinSize(a.ctx, 0, 0)
+
+	// Set window size to full screen
+	runtime.WindowSetSize(a.ctx, bounds.Dx(), bounds.Dy())
+
+	// Make window always on top
+	runtime.WindowSetAlwaysOnTop(a.ctx, true)
+
+	// Show the window
+	runtime.WindowShow(a.ctx)
+
+	// Calculate DPI scale ratio (physical screenshot size / logical screen size)
+	scaleRatio := float64(result.Width) / float64(bounds.Dx())
+	if scaleRatio < 1.0 {
+		scaleRatio = 1.0
+	}
+
+	return &RegionCaptureData{
+		Screenshot:  result,
+		ScreenX:     bounds.Min.X,
+		ScreenY:     bounds.Min.Y,
+		Width:       bounds.Dx(),
+		Height:      bounds.Dy(),
+		ScaleRatio:  scaleRatio,
+		PhysicalW:   result.Width,
+		PhysicalH:   result.Height,
+	}, nil
+}
+
+// FinishRegionCapture restores the window to normal state after region selection
+func (a *App) FinishRegionCapture() {
+	// Remove always on top
+	runtime.WindowSetAlwaysOnTop(a.ctx, false)
+
+	// Restore min size constraint
+	runtime.WindowSetMinSize(a.ctx, 800, 600)
+
+	// Restore window to default size
+	runtime.WindowSetSize(a.ctx, 1200, 800)
+
+	// Center the window
+	runtime.WindowCenter(a.ctx)
+}
+
 // ShowWindow shows the main window
 func (a *App) ShowWindow() {
 	runtime.WindowShow(a.ctx)

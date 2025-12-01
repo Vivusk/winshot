@@ -6,6 +6,7 @@ interface RegionSelectorProps {
   onSelect: (x: number, y: number, width: number, height: number) => void;
   screenWidth: number;
   screenHeight: number;
+  screenshotData?: string; // Base64 encoded screenshot to display as background
 }
 
 export function RegionSelector({
@@ -14,6 +15,7 @@ export function RegionSelector({
   onSelect,
   screenWidth,
   screenHeight,
+  screenshotData,
 }: RegionSelectorProps) {
   const [isDrawing, setIsDrawing] = useState(false);
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
@@ -78,14 +80,27 @@ export function RegionSelector({
   return (
     <div
       className="fixed inset-0 z-[9999] cursor-crosshair select-none"
-      style={{ background: 'rgba(0, 0, 0, 0.3)' }}
+      style={{
+        width: screenWidth,
+        height: screenHeight,
+        background: screenshotData
+          ? `url(data:image/png;base64,${screenshotData}) no-repeat center center`
+          : 'rgba(0, 0, 0, 0.3)',
+        backgroundSize: 'cover',
+      }}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
     >
+      {/* Semi-transparent overlay on top of screenshot */}
+      <div
+        className="absolute inset-0"
+        style={{ background: 'rgba(0, 0, 0, 0.3)' }}
+      />
+
       {/* Instructions */}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-black/80 text-white rounded-lg text-sm">
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-black/80 text-white rounded-lg text-sm z-10">
         Drag to select region. Press ESC to cancel.
       </div>
 
@@ -130,9 +145,25 @@ export function RegionSelector({
             }}
           />
 
+          {/* Clear area (shows the screenshot) */}
+          <div
+            className="absolute"
+            style={{
+              left: selectionX,
+              top: selectionY,
+              width: selectionWidth,
+              height: selectionHeight,
+              background: screenshotData
+                ? `url(data:image/png;base64,${screenshotData}) no-repeat`
+                : 'transparent',
+              backgroundPosition: `-${selectionX}px -${selectionY}px`,
+              backgroundSize: `${screenWidth}px ${screenHeight}px`,
+            }}
+          />
+
           {/* Selection border */}
           <div
-            className="absolute border-2 border-blue-500 bg-transparent"
+            className="absolute border-2 border-blue-500 pointer-events-none"
             style={{
               left: selectionX,
               top: selectionY,
@@ -149,7 +180,7 @@ export function RegionSelector({
 
           {/* Size indicator */}
           <div
-            className="absolute px-2 py-1 bg-blue-500 text-white text-xs rounded"
+            className="absolute px-2 py-1 bg-blue-500 text-white text-xs rounded z-10"
             style={{
               left: selectionX + selectionWidth / 2 - 40,
               top: selectionY + selectionHeight + 8,

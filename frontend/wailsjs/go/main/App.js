@@ -18,6 +18,10 @@ export function CaptureWindow(arg1) {
   return window['go']['main']['App']['CaptureWindow'](arg1);
 }
 
+export function FinishRegionCapture() {
+  return window['go']['main']['App']['FinishRegionCapture']();
+}
+
 export function GetConfig() {
   return window['go']['main']['App']['GetConfig']();
 }
@@ -44,6 +48,10 @@ export function GetWindowList() {
 
 export function MinimizeToTray() {
   return window['go']['main']['App']['MinimizeToTray']();
+}
+
+export function PrepareRegionCapture() {
+  return window['go']['main']['App']['PrepareRegionCapture']();
 }
 
 export function QuickSave(arg1, arg2) {

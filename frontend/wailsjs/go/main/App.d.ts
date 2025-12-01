@@ -13,6 +13,8 @@ export function CaptureRegion(arg1:number,arg2:number,arg3:number,arg4:number):P
 
 export function CaptureWindow(arg1:number):Promise<screenshot.CaptureResult>;
 
+export function FinishRegionCapture():Promise<void>;
+
 export function GetConfig():Promise<config.Config>;
 
 export function GetDisplayBounds(arg1:number):Promise<main.DisplayBounds>;
@@ -26,6 +28,8 @@ export function GetWindowInfo(arg1:number):Promise<windows.WindowInfo>;
 export function GetWindowList():Promise<Array<windows.WindowInfo>>;
 
 export function MinimizeToTray():Promise<void>;
+
+export function PrepareRegionCapture():Promise<main.RegionCaptureData>;
 
 export function QuickSave(arg1:string,arg2:string):Promise<main.SaveImageResult>;
 

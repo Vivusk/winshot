@@ -13,12 +13,13 @@ import { ExportToolbar } from './components/export-toolbar';
 import { CaptureResult, CaptureMode, WindowInfo, Annotation, EditorTool, CropArea, AspectRatio } from './types';
 import {
   CaptureFullscreen,
-  CaptureRegion,
   CaptureWindow,
   GetDisplayBounds,
   SaveImage,
   QuickSave,
   MinimizeToTray,
+  PrepareRegionCapture,
+  FinishRegionCapture,
 } from '../wailsjs/go/main/App';
 import { EventsOn, EventsOff } from '../wailsjs/runtime/runtime';
 
@@ -29,6 +30,8 @@ function App() {
   const [showWindowPicker, setShowWindowPicker] = useState(false);
   const [showRegionSelector, setShowRegionSelector] = useState(false);
   const [displayBounds, setDisplayBounds] = useState({ width: 1920, height: 1080 });
+  const [regionScreenshot, setRegionScreenshot] = useState<string | undefined>();
+  const [regionScaleRatio, setRegionScaleRatio] = useState(1);
   const [statusMessage, setStatusMessage] = useState<string | undefined>();
 
   // Editor settings
@@ -61,10 +64,18 @@ function App() {
     }
 
     if (mode === 'region') {
-      // Show region selector overlay
-      const bounds = await GetDisplayBounds(0);
-      setDisplayBounds({ width: bounds.width, height: bounds.height });
-      setShowRegionSelector(true);
+      // Prepare region capture - this will hide window, take screenshot, and make window fullscreen
+      try {
+        const data = await PrepareRegionCapture();
+        setDisplayBounds({ width: data.width, height: data.height });
+        setRegionScreenshot(data.screenshot.data);
+        setRegionScaleRatio(data.scaleRatio || 1);
+        setShowRegionSelector(true);
+      } catch (error) {
+        console.error('Failed to prepare region capture:', error);
+        setStatusMessage('Failed to prepare region capture');
+        setTimeout(() => setStatusMessage(undefined), 3000);
+      }
       return;
     }
 
@@ -115,16 +126,66 @@ function App() {
     setStatusMessage('Capturing region...');
 
     try {
-      const result = await CaptureRegion(x, y, width, height) as CaptureResult;
-      setScreenshot(result);
-      setStatusMessage(undefined);
+      // Crop the selected region from the fullscreen screenshot (client-side)
+      if (!regionScreenshot) {
+        throw new Error('No screenshot data available');
+      }
+
+      // Create an image from the fullscreen screenshot
+      const img = new Image();
+      img.onload = () => {
+        // Apply DPI scale ratio to get actual pixel coordinates in the screenshot
+        const scale = regionScaleRatio;
+        const scaledX = Math.round(x * scale);
+        const scaledY = Math.round(y * scale);
+        const scaledWidth = Math.round(width * scale);
+        const scaledHeight = Math.round(height * scale);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = scaledWidth;
+        canvas.height = scaledHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          setStatusMessage('Failed to create canvas context');
+          setIsCapturing(false);
+          return;
+        }
+
+        // Crop the selected region from the high-DPI screenshot
+        ctx.drawImage(img, scaledX, scaledY, scaledWidth, scaledHeight, 0, 0, scaledWidth, scaledHeight);
+
+        // Get the cropped image as base64
+        const croppedData = canvas.toDataURL('image/png').split(',')[1];
+        setScreenshot({
+          width: scaledWidth,
+          height: scaledHeight,
+          data: croppedData,
+        });
+        setStatusMessage(undefined);
+        setIsCapturing(false);
+
+        // Restore window to normal state
+        FinishRegionCapture();
+        setRegionScreenshot(undefined);
+        setRegionScaleRatio(1);
+      };
+      img.onerror = () => {
+        setStatusMessage('Failed to load screenshot');
+        setIsCapturing(false);
+        FinishRegionCapture();
+        setRegionScreenshot(undefined);
+        setRegionScaleRatio(1);
+      };
+      img.src = `data:image/png;base64,${regionScreenshot}`;
     } catch (error) {
       console.error('Region capture failed:', error);
       setStatusMessage('Capture failed');
       setTimeout(() => setStatusMessage(undefined), 3000);
+      setIsCapturing(false);
+      FinishRegionCapture();
+      setRegionScreenshot(undefined);
+      setRegionScaleRatio(1);
     }
-
-    setIsCapturing(false);
   };
 
   const handleClear = () => {
@@ -140,10 +201,18 @@ function App() {
       handleCapture('fullscreen');
     };
     const handleRegion = async () => {
-      // Show region selector overlay
-      const bounds = await GetDisplayBounds(0);
-      setDisplayBounds({ width: bounds.width, height: bounds.height });
-      setShowRegionSelector(true);
+      // Prepare region capture - this will hide window, take screenshot, and make window fullscreen
+      try {
+        const data = await PrepareRegionCapture();
+        setDisplayBounds({ width: data.width, height: data.height });
+        setRegionScreenshot(data.screenshot.data);
+        setRegionScaleRatio(data.scaleRatio || 1);
+        setShowRegionSelector(true);
+      } catch (error) {
+        console.error('Failed to prepare region capture:', error);
+        setStatusMessage('Failed to prepare region capture');
+        setTimeout(() => setStatusMessage(undefined), 3000);
+      }
     };
     const handleWindow = () => {
       setShowWindowPicker(true);
@@ -501,10 +570,16 @@ function App() {
 
       <RegionSelector
         isOpen={showRegionSelector}
-        onClose={() => setShowRegionSelector(false)}
+        onClose={() => {
+          setShowRegionSelector(false);
+          FinishRegionCapture();
+          setRegionScreenshot(undefined);
+          setRegionScaleRatio(1);
+        }}
         onSelect={handleRegionSelect}
         screenWidth={displayBounds.width}
         screenHeight={displayBounds.height}
+        screenshotData={regionScreenshot}
       />
 
       <SettingsModal
