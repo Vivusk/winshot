@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { X } from 'lucide-react';
 
 interface HotkeyInputProps {
   value: string;
@@ -155,9 +156,7 @@ export function HotkeyInput({ value, onChange, label, disabled = false }: Hotkey
                        text-slate-400 hover:text-rose-400"
             title="Clear hotkey"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X className="w-4 h-4" />
           </button>
         )}
       </div>

@@ -1,4 +1,5 @@
 import { WindowMinimise, WindowToggleMaximise, Quit } from '../../wailsjs/runtime/runtime';
+import { Minus, Square, X, Camera } from 'lucide-react';
 
 interface TitleBarProps {
   title?: string;
@@ -14,18 +15,7 @@ export function TitleBar({ title = 'WinShot' }: TitleBarProps) {
       <div className="flex items-center gap-2.5 px-4 flex-1 h-full">
         {/* Vibrant gradient icon */}
         <div className="relative">
-          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
-            <defs>
-              <linearGradient id="iconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#8b5cf6" />
-                <stop offset="100%" stopColor="#06b6d4" />
-              </linearGradient>
-            </defs>
-            <rect x="3" y="3" width="18" height="18" rx="3" stroke="url(#iconGradient)" strokeWidth="2"/>
-            <circle cx="8.5" cy="8.5" r="1.5" fill="url(#iconGradient)"/>
-            <path stroke="url(#iconGradient)" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                  d="M21 15l-5-5L5 21"/>
-          </svg>
+          <Camera className="w-5 h-5 text-violet-400" />
         </div>
         <span className="text-sm font-semibold text-gradient">{title}</span>
       </div>
@@ -42,9 +32,7 @@ export function TitleBar({ title = 'WinShot' }: TitleBarProps) {
                      hover:bg-white/10 hover:text-white transition-all duration-200"
           title="Minimize"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeWidth="2" d="M5 12h14" />
-          </svg>
+          <Minus className="w-4 h-4" />
         </button>
 
         {/* Maximize/Restore button */}
@@ -54,9 +42,7 @@ export function TitleBar({ title = 'WinShot' }: TitleBarProps) {
                      hover:bg-white/10 hover:text-white transition-all duration-200"
           title="Maximize"
         >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <rect x="4" y="4" width="16" height="16" rx="2" strokeWidth="2" />
-          </svg>
+          <Square className="w-3.5 h-3.5" />
         </button>
 
         {/* Close button */}
@@ -66,9 +52,7 @@ export function TitleBar({ title = 'WinShot' }: TitleBarProps) {
                      hover:bg-gradient-to-r hover:from-red-500 hover:to-pink-500 hover:text-white transition-all duration-200"
           title="Close"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          <X className="w-4 h-4" />
         </button>
       </div>
     </div>

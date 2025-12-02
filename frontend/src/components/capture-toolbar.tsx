@@ -1,4 +1,5 @@
 import { CaptureMode } from '../types';
+import { Monitor, Scan, AppWindow, Settings, ChevronDown } from 'lucide-react';
 
 interface CaptureToolbarProps {
   onCapture: (mode: CaptureMode) => void;
@@ -24,9 +25,7 @@ export function CaptureToolbar({ onCapture, isCapturing, hasScreenshot, onClear,
                      hover:-translate-y-0.5 active:translate-y-0"
           title="Capture entire screen (PrintScreen)"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <rect x="3" y="3" width="18" height="18" rx="3" strokeWidth="2"/>
-          </svg>
+          <Monitor className="w-4 h-4" />
           Fullscreen
         </button>
 
@@ -41,10 +40,7 @@ export function CaptureToolbar({ onCapture, isCapturing, hasScreenshot, onClear,
                      hover:-translate-y-0.5 active:translate-y-0"
           title="Select region to capture (Ctrl+PrintScreen)"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                  d="M4 5a1 1 0 011-1h4a1 1 0 010 2H6v3a1 1 0 01-2 0V5zM4 19a1 1 0 001 1h4a1 1 0 000-2H6v-3a1 1 0 00-2 0v4zM20 5a1 1 0 00-1-1h-4a1 1 0 000 2h3v3a1 1 0 002 0V5zM20 19a1 1 0 01-1 1h-4a1 1 0 010-2h3v-3a1 1 0 012 0v4z"/>
-          </svg>
+          <Scan className="w-4 h-4" />
           Region
         </button>
 
@@ -59,10 +55,7 @@ export function CaptureToolbar({ onCapture, isCapturing, hasScreenshot, onClear,
                      hover:-translate-y-0.5 active:translate-y-0"
           title="Capture specific window (Ctrl+Shift+PrintScreen)"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <rect x="3" y="4" width="18" height="16" rx="3" strokeWidth="2"/>
-            <path strokeLinecap="round" strokeWidth="2" d="M3 9h18"/>
-          </svg>
+          <AppWindow className="w-4 h-4" />
           Window
         </button>
       </div>
@@ -100,11 +93,7 @@ export function CaptureToolbar({ onCapture, isCapturing, hasScreenshot, onClear,
                      transition-all duration-200"
           title="Settings"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
+          <Settings className="w-5 h-5" />
         </button>
       )}
 
@@ -117,9 +106,7 @@ export function CaptureToolbar({ onCapture, isCapturing, hasScreenshot, onClear,
                      transition-all duration-200"
           title="Minimize to tray"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-          </svg>
+          <ChevronDown className="w-5 h-5" />
         </button>
       )}
     </div>

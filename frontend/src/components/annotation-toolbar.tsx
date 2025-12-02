@@ -1,4 +1,14 @@
 import { EditorTool } from '../types';
+import {
+  MousePointer2,
+  Square,
+  Circle,
+  MoveRight,
+  Minus,
+  Type,
+  Crop,
+  Trash2,
+} from 'lucide-react';
 
 interface AnnotationToolbarProps {
   activeTool: EditorTool;
@@ -34,72 +44,43 @@ export function AnnotationToolbar({
       id: 'select',
       label: 'Select',
       shortcut: 'V',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
-        </svg>
-      ),
+      icon: <MousePointer2 className="w-5 h-5" />,
     },
     {
       id: 'rectangle',
       label: 'Rectangle',
       shortcut: 'R',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth="2" />
-        </svg>
-      ),
+      icon: <Square className="w-5 h-5" />,
     },
     {
       id: 'ellipse',
       label: 'Ellipse',
       shortcut: 'E',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <ellipse cx="12" cy="12" rx="9" ry="7" strokeWidth="2" />
-        </svg>
-      ),
+      icon: <Circle className="w-5 h-5" />,
     },
     {
       id: 'arrow',
       label: 'Arrow',
       shortcut: 'A',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-        </svg>
-      ),
+      icon: <MoveRight className="w-5 h-5" />,
     },
     {
       id: 'line',
       label: 'Line',
       shortcut: 'L',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeWidth="2" d="M4 20L20 4" />
-        </svg>
-      ),
+      icon: <Minus className="w-5 h-5 -rotate-45" />,
     },
     {
       id: 'text',
       label: 'Text',
       shortcut: 'T',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7" />
-          <text x="6" y="18" fontSize="12" fill="currentColor" fontWeight="bold">T</text>
-        </svg>
-      ),
+      icon: <Type className="w-5 h-5" />,
     },
     {
       id: 'crop',
       label: 'Crop',
       shortcut: 'C',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2" />
-        </svg>
-      ),
+      icon: <Crop className="w-5 h-5" />,
     },
   ];
 
@@ -178,9 +159,7 @@ export function AnnotationToolbar({
         }`}
         title="Delete Selected (Del)"
       >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-        </svg>
+        <Trash2 className="w-5 h-5" />
       </button>
     </div>
   );

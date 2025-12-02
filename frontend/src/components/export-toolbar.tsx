@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ClipboardCopy, Download, Save } from 'lucide-react';
 
 interface ExportToolbarProps {
   onSave: (format: 'png' | 'jpeg') => void;
@@ -56,9 +57,7 @@ export function ExportToolbar({
                      disabled:opacity-50 disabled:cursor-not-allowed"
           title="Copy to Clipboard (Ctrl+C)"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-          </svg>
+          <ClipboardCopy className="w-4 h-4" />
           Copy
         </button>
 
@@ -73,9 +72,7 @@ export function ExportToolbar({
                      disabled:opacity-50 disabled:cursor-not-allowed"
           title="Quick Save to Pictures/WinShot (Ctrl+S)"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-          </svg>
+          <Download className="w-4 h-4" />
           Quick Save
         </button>
 
@@ -90,9 +87,7 @@ export function ExportToolbar({
                      disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
           title="Save As... (Ctrl+Shift+S)"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-          </svg>
+          <Save className="w-4 h-4" />
           Save As...
         </button>
       </div>
