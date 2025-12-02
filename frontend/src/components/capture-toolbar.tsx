@@ -11,26 +11,34 @@ interface CaptureToolbarProps {
 
 export function CaptureToolbar({ onCapture, isCapturing, hasScreenshot, onClear, onMinimize, onOpenSettings }: CaptureToolbarProps) {
   return (
-    <div className="flex items-center gap-4 px-4 py-3 bg-slate-800 border-b border-slate-700">
+    <div className="flex items-center gap-4 px-4 py-3 glass">
       <div className="flex gap-2">
+        {/* Fullscreen - Primary gradient button */}
         <button
           onClick={() => onCapture('fullscreen')}
           disabled={isCapturing}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600
-                     text-white rounded-lg transition-colors flex items-center gap-2"
+          className="px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center gap-2
+                     bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-400 hover:to-purple-500
+                     disabled:from-slate-600 disabled:to-slate-700 disabled:opacity-50
+                     text-white font-medium shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40
+                     hover:-translate-y-0.5 active:translate-y-0"
           title="Capture entire screen (PrintScreen)"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth="2"/>
+            <rect x="3" y="3" width="18" height="18" rx="3" strokeWidth="2"/>
           </svg>
           Fullscreen
         </button>
 
+        {/* Region - Cyan/teal gradient */}
         <button
           onClick={() => onCapture('region')}
           disabled={isCapturing}
-          className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-slate-600
-                     text-white rounded-lg transition-colors flex items-center gap-2"
+          className="px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center gap-2
+                     bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400
+                     disabled:from-slate-600 disabled:to-slate-700 disabled:opacity-50
+                     text-white font-medium shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40
+                     hover:-translate-y-0.5 active:translate-y-0"
           title="Select region to capture (Ctrl+PrintScreen)"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -40,16 +48,20 @@ export function CaptureToolbar({ onCapture, isCapturing, hasScreenshot, onClear,
           Region
         </button>
 
+        {/* Window - Pink/rose gradient */}
         <button
           onClick={() => onCapture('window')}
           disabled={isCapturing}
-          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-600
-                     text-white rounded-lg transition-colors flex items-center gap-2"
+          className="px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center gap-2
+                     bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-400 hover:to-rose-400
+                     disabled:from-slate-600 disabled:to-slate-700 disabled:opacity-50
+                     text-white font-medium shadow-lg shadow-pink-500/25 hover:shadow-pink-500/40
+                     hover:-translate-y-0.5 active:translate-y-0"
           title="Capture specific window (Ctrl+Shift+PrintScreen)"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <rect x="3" y="4" width="18" height="16" rx="2" strokeWidth="2"/>
-            <path strokeLinecap="round" strokeWidth="2" d="M3 8h18"/>
+            <rect x="3" y="4" width="18" height="16" rx="3" strokeWidth="2"/>
+            <path strokeLinecap="round" strokeWidth="2" d="M3 9h18"/>
           </svg>
           Window
         </button>
@@ -57,11 +69,12 @@ export function CaptureToolbar({ onCapture, isCapturing, hasScreenshot, onClear,
 
       {hasScreenshot && (
         <>
-          <div className="h-6 w-px bg-slate-600" />
+          <div className="h-6 w-px bg-white/10" />
           <button
             onClick={onClear}
-            className="px-4 py-2 bg-slate-600 hover:bg-slate-500
-                       text-white rounded-lg transition-colors"
+            className="px-4 py-2.5 rounded-xl transition-all duration-200
+                       bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20
+                       text-slate-300 hover:text-white font-medium"
           >
             Clear
           </button>
@@ -69,7 +82,10 @@ export function CaptureToolbar({ onCapture, isCapturing, hasScreenshot, onClear,
       )}
 
       {isCapturing && (
-        <span className="text-slate-400 animate-pulse">Capturing...</span>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+          <span className="text-cyan-300 animate-pulse font-medium">Capturing...</span>
+        </div>
       )}
 
       {/* Spacer */}
@@ -79,7 +95,9 @@ export function CaptureToolbar({ onCapture, isCapturing, hasScreenshot, onClear,
       {onOpenSettings && (
         <button
           onClick={onOpenSettings}
-          className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+          className="p-2.5 rounded-xl text-slate-400 hover:text-white
+                     bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/15
+                     transition-all duration-200"
           title="Settings"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -94,7 +112,9 @@ export function CaptureToolbar({ onCapture, isCapturing, hasScreenshot, onClear,
       {onMinimize && (
         <button
           onClick={onMinimize}
-          className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+          className="p-2.5 rounded-xl text-slate-400 hover:text-white
+                     bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/15
+                     transition-all duration-200"
           title="Minimize to tray"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -104,17 +104,17 @@ export function AnnotationToolbar({
   ];
 
   return (
-    <div className="flex items-center gap-2 p-2 bg-slate-800 border-b border-slate-700">
+    <div className="flex items-center gap-3 px-3 py-2 glass-light">
       {/* Tools */}
-      <div className="flex items-center gap-1 pr-3 border-r border-slate-600">
+      <div className="flex items-center gap-1 pr-3 border-r border-white/10">
         {tools.map((tool) => (
           <button
             key={tool.id}
             onClick={() => onToolChange(tool.id)}
-            className={`p-2 rounded-lg transition-colors ${
+            className={`p-2 rounded-lg transition-all duration-200 ${
               activeTool === tool.id
-                ? 'bg-blue-600 text-white'
-                : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                ? 'bg-gradient-to-r from-violet-500 to-purple-600 text-white shadow-lg shadow-violet-500/30'
+                : 'text-slate-400 hover:text-white hover:bg-white/10'
             }`}
             title={`${tool.label} (${tool.shortcut})`}
           >
@@ -124,17 +124,17 @@ export function AnnotationToolbar({
       </div>
 
       {/* Color Picker */}
-      <div className="flex items-center gap-1 px-3 border-r border-slate-600">
-        <span className="text-xs text-slate-400 mr-1">Color:</span>
+      <div className="flex items-center gap-2 px-3 border-r border-white/10">
+        <span className="text-xs text-slate-400 font-medium">Color</span>
         <div className="flex gap-1">
           {COLORS.map((color) => (
             <button
               key={color}
               onClick={() => onColorChange(color)}
-              className={`w-6 h-6 rounded border-2 transition-all ${
+              className={`w-6 h-6 rounded-md transition-all duration-200 ${
                 strokeColor === color
-                  ? 'border-blue-500 scale-110'
-                  : 'border-transparent hover:border-slate-500'
+                  ? 'ring-2 ring-violet-400 ring-offset-2 ring-offset-slate-900 scale-110'
+                  : 'hover:scale-110 hover:ring-1 hover:ring-white/30'
               }`}
               style={{ backgroundColor: color }}
               title={color}
@@ -144,17 +144,17 @@ export function AnnotationToolbar({
       </div>
 
       {/* Stroke Width */}
-      <div className="flex items-center gap-1 px-3 border-r border-slate-600">
-        <span className="text-xs text-slate-400 mr-1">Width:</span>
+      <div className="flex items-center gap-2 px-3 border-r border-white/10">
+        <span className="text-xs text-slate-400 font-medium">Width</span>
         <div className="flex gap-1">
           {STROKE_WIDTHS.map((width) => (
             <button
               key={width}
               onClick={() => onStrokeWidthChange(width)}
-              className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${
+              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${
                 strokeWidth === width
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                  ? 'bg-gradient-to-r from-violet-500 to-purple-600 text-white shadow-lg shadow-violet-500/30'
+                  : 'text-slate-400 hover:text-white hover:bg-white/10'
               }`}
               title={`${width}px`}
             >
@@ -171,10 +171,10 @@ export function AnnotationToolbar({
       <button
         onClick={onDeleteSelected}
         disabled={!hasSelection}
-        className={`p-2 rounded-lg transition-colors ${
+        className={`p-2 rounded-lg transition-all duration-200 ${
           hasSelection
-            ? 'text-red-400 hover:text-red-300 hover:bg-slate-700'
-            : 'text-slate-600 cursor-not-allowed'
+            ? 'text-rose-400 hover:text-white hover:bg-gradient-to-r hover:from-rose-500 hover:to-pink-500 hover:shadow-lg hover:shadow-rose-500/30'
+            : 'text-slate-600 cursor-not-allowed opacity-50'
         }`}
         title="Delete Selected (Del)"
       >
