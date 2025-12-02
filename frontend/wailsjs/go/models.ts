@@ -82,6 +82,7 @@ export namespace config {
 	    quickSave: QuickSaveConfig;
 	    export: ExportConfig;
 	    window: WindowConfig;
+	    backgroundImages?: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -94,6 +95,7 @@ export namespace config {
 	        this.quickSave = this.convertValues(source["quickSave"], QuickSaveConfig);
 	        this.export = this.convertValues(source["export"], ExportConfig);
 	        this.window = this.convertValues(source["window"], WindowConfig);
+	        this.backgroundImages = source["backgroundImages"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

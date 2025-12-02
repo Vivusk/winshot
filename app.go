@@ -450,3 +450,20 @@ func (a *App) registerHotkeysFromConfig() {
 		a.hotkeyManager.Register(hotkeys.HotkeyWindow, mods, key)
 	}
 }
+
+// GetBackgroundImages returns the list of saved background images (base64 data URLs)
+func (a *App) GetBackgroundImages() []string {
+	if a.config == nil || a.config.BackgroundImages == nil {
+		return []string{}
+	}
+	return a.config.BackgroundImages
+}
+
+// SaveBackgroundImages saves the list of background images to persistent config
+func (a *App) SaveBackgroundImages(images []string) error {
+	if a.config == nil {
+		return nil
+	}
+	a.config.BackgroundImages = images
+	return a.config.Save()
+}

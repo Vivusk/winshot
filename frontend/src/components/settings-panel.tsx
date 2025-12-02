@@ -1,8 +1,8 @@
 import { useRef, useState, useEffect } from 'react';
 import { OutputRatio } from '../types';
+import { GetBackgroundImages, SaveBackgroundImages } from '../../wailsjs/go/main/App';
 
 const MAX_BACKGROUND_IMAGES = 8;
-const STORAGE_KEY = 'winshot-background-images';
 
 // Output ratio presets with display labels
 const OUTPUT_RATIO_PRESETS: { value: OutputRatio; label: string }[] = [
@@ -82,25 +82,16 @@ export function SettingsPanel({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
 
-  // Load images from localStorage on mount
+  // Load images from Go backend on mount
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try {
-        const images = JSON.parse(stored);
-        if (Array.isArray(images)) {
-          setUploadedImages(images.slice(0, MAX_BACKGROUND_IMAGES));
-        }
-      } catch {
-        // Invalid stored data, ignore
+    GetBackgroundImages().then((images) => {
+      if (Array.isArray(images)) {
+        setUploadedImages(images.slice(0, MAX_BACKGROUND_IMAGES));
       }
-    }
+    }).catch(() => {
+      // Failed to load, start with empty
+    });
   }, []);
-
-  // Save images to localStorage when changed
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(uploadedImages));
-  }, [uploadedImages]);
 
   // Max padding is 1/3 of the smaller dimension
   const maxPadding = Math.floor(Math.min(imageWidth, imageHeight) / 3);
@@ -111,7 +102,12 @@ export function SettingsPanel({
       const reader = new FileReader();
       reader.onload = (event) => {
         const dataUrl = event.target?.result as string;
-        setUploadedImages(prev => [...prev, dataUrl]);
+        const newImages = [...uploadedImages, dataUrl];
+        setUploadedImages(newImages);
+        // Persist to Go backend
+        SaveBackgroundImages(newImages).catch(() => {
+          // Silent fail - images still work in current session
+        });
         onBackgroundChange(`url(${dataUrl})`);
       };
       reader.readAsDataURL(file);
@@ -124,7 +120,12 @@ export function SettingsPanel({
 
   const handleRemoveImage = (index: number) => {
     const imageToRemove = uploadedImages[index];
-    setUploadedImages(prev => prev.filter((_, i) => i !== index));
+    const newImages = uploadedImages.filter((_, i) => i !== index);
+    setUploadedImages(newImages);
+    // Persist to Go backend
+    SaveBackgroundImages(newImages).catch(() => {
+      // Silent fail
+    });
     // If the removed image was the active background, reset to first gradient
     if (backgroundColor === `url(${imageToRemove})`) {
       onBackgroundChange(GRADIENT_PRESETS[0].value);

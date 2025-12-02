@@ -15,6 +15,8 @@ export function CaptureWindow(arg1:number):Promise<screenshot.CaptureResult>;
 
 export function FinishRegionCapture():Promise<void>;
 
+export function GetBackgroundImages():Promise<Array<string>>;
+
 export function GetConfig():Promise<config.Config>;
 
 export function GetDisplayBounds(arg1:number):Promise<main.DisplayBounds>;
@@ -32,6 +34,8 @@ export function MinimizeToTray():Promise<void>;
 export function PrepareRegionCapture():Promise<main.RegionCaptureData>;
 
 export function QuickSave(arg1:string,arg2:string):Promise<main.SaveImageResult>;
+
+export function SaveBackgroundImages(arg1:Array<string>):Promise<void>;
 
 export function SaveConfig(arg1:config.Config):Promise<void>;
 

@@ -41,11 +41,12 @@ type WindowConfig struct {
 
 // Config holds all application settings
 type Config struct {
-	Hotkeys   HotkeyConfig    `json:"hotkeys"`
-	Startup   StartupConfig   `json:"startup"`
-	QuickSave QuickSaveConfig `json:"quickSave"`
-	Export    ExportConfig    `json:"export"`
-	Window    WindowConfig    `json:"window"`
+	Hotkeys          HotkeyConfig    `json:"hotkeys"`
+	Startup          StartupConfig   `json:"startup"`
+	QuickSave        QuickSaveConfig `json:"quickSave"`
+	Export           ExportConfig    `json:"export"`
+	Window           WindowConfig    `json:"window"`
+	BackgroundImages []string        `json:"backgroundImages,omitempty"`
 }
 
 // Default returns default configuration

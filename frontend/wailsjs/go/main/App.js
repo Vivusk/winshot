@@ -22,6 +22,10 @@ export function FinishRegionCapture() {
   return window['go']['main']['App']['FinishRegionCapture']();
 }
 
+export function GetBackgroundImages() {
+  return window['go']['main']['App']['GetBackgroundImages']();
+}
+
 export function GetConfig() {
   return window['go']['main']['App']['GetConfig']();
 }
@@ -56,6 +60,10 @@ export function PrepareRegionCapture() {
 
 export function QuickSave(arg1, arg2) {
   return window['go']['main']['App']['QuickSave'](arg1, arg2);
+}
+
+export function SaveBackgroundImages(arg1) {
+  return window['go']['main']['App']['SaveBackgroundImages'](arg1);
 }
 
 export function SaveConfig(arg1) {
