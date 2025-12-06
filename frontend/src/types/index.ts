@@ -39,6 +39,8 @@ export interface Annotation {
   points?: number[];
   // For arrows - curved style
   curved?: boolean;
+  // Control point offset for curved arrows (relative to midpoint, perpendicular direction)
+  curveOffset?: { x: number; y: number };
   // For text annotations
   text?: string;
   fontSize?: number;
