@@ -473,6 +473,16 @@ function App() {
     }
   }, [selectedAnnotationId, annotations, handleAnnotationUpdate]);
 
+  // Update selected arrow annotation curved property
+  const handleCurvedChange = useCallback((curved: boolean) => {
+    if (selectedAnnotationId) {
+      const selectedAnnotation = annotations.find(a => a.id === selectedAnnotationId);
+      if (selectedAnnotation?.type === 'arrow') {
+        handleAnnotationUpdate(selectedAnnotationId, { curved });
+      }
+    }
+  }, [selectedAnnotationId, annotations, handleAnnotationUpdate]);
+
   const handleDeleteSelected = useCallback(() => {
     if (selectedAnnotationId) {
       setAnnotations((prev) => prev.filter((ann) => ann.id !== selectedAnnotationId));
@@ -781,6 +791,7 @@ function App() {
             onStrokeWidthChange={handleStrokeWidthChange}
             onFontSizeChange={handleFontSizeChange}
             onFontStyleChange={handleFontStyleChange}
+            onCurvedChange={handleCurvedChange}
             onDeleteSelected={handleDeleteSelected}
             hasSelection={!!selectedAnnotationId}
             selectedAnnotation={selectedAnnotationId ? annotations.find(a => a.id === selectedAnnotationId) : undefined}
@@ -814,6 +825,7 @@ function App() {
           onAnnotationAdd={handleAnnotationAdd}
           onAnnotationSelect={handleAnnotationSelect}
           onAnnotationUpdate={handleAnnotationUpdate}
+          onToolChange={handleToolChange}
           cropArea={cropArea}
           aspectRatio={aspectRatio}
           onCropChange={handleCropChange}

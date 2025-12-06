@@ -3,7 +3,7 @@ import { Rect, Ellipse, Arrow, Line, Transformer, Group, Text, Circle } from 're
 import Konva from 'konva';
 
 // Constants for better hit detection on thin shapes
-const HIT_STROKE_WIDTH = 20; // Larger clickable area for lines/arrows
+const HIT_STROKE_WIDTH = 28; // Larger clickable area for lines/arrows (increased for easier selection)
 const ENDPOINT_RADIUS = 6; // Radius of draggable endpoint handles
 const ENDPOINT_HOVER_RADIUS = 8; // Slightly larger on hover
 
@@ -258,6 +258,9 @@ function ArrowShape({ annotation, isSelected, onSelect, onUpdate }: ShapeProps) 
         pointerLength={annotation.strokeWidth * 3}
         pointerWidth={annotation.strokeWidth * 3}
         hitStrokeWidth={HIT_STROKE_WIDTH}
+        lineCap="square"
+        lineJoin="miter"
+        tension={annotation.curved ? 0.3 : 0}
       />
       {/* Draggable endpoint handles when selected */}
       {isSelected && (
@@ -414,7 +417,8 @@ function LineShape({ annotation, isSelected, onSelect, onUpdate }: ShapeProps) {
         points={points}
         stroke={annotation.stroke}
         strokeWidth={annotation.strokeWidth}
-        lineCap="round"
+        lineCap="square"
+        lineJoin="miter"
         hitStrokeWidth={HIT_STROKE_WIDTH}
       />
       {/* Draggable endpoint handles when selected */}

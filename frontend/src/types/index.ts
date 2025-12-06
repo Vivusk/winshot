@@ -37,6 +37,8 @@ export interface Annotation {
   fill?: string;
   // For arrows and lines
   points?: number[];
+  // For arrows - curved style
+  curved?: boolean;
   // For text annotations
   text?: string;
   fontSize?: number;

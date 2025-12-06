@@ -26,6 +26,7 @@ interface EditorCanvasProps {
   onAnnotationAdd: (annotation: Annotation) => void;
   onAnnotationSelect: (id: string | null) => void;
   onAnnotationUpdate: (id: string, updates: Partial<Annotation>) => void;
+  onToolChange?: (tool: EditorTool) => void;
   // Crop props
   cropArea: CropArea | null;
   aspectRatio: AspectRatio;
@@ -170,6 +171,7 @@ export function EditorCanvas({
   onAnnotationAdd,
   onAnnotationSelect,
   onAnnotationUpdate,
+  onToolChange,
   cropArea,
   aspectRatio,
   onCropChange,
@@ -380,12 +382,36 @@ export function EditorCanvas({
       if (isTransformerNode(e.target)) {
         return;
       }
-      // Check if we clicked on empty space (Stage or background Rect only)
-      const clickedOnEmpty = e.target === e.target.getStage() ||
-        (e.target.getClassName() === 'Rect' && !e.target.getParent()?.getClassName());
-      if (clickedOnEmpty) {
-        onAnnotationSelect(null);
+      // Check if we clicked directly on an annotation shape
+      // Annotations have their own onClick handlers that will fire and select them
+      // So we only need to deselect when clicking on non-annotation elements
+      const className = e.target.getClassName();
+
+      // These are annotation shape types that have their own onClick handlers
+      const annotationShapeTypes = ['Arrow', 'Line', 'Rect', 'Ellipse', 'Text', 'Circle'];
+
+      // Check if clicking on an annotation element (Circle is for endpoint handles)
+      const isAnnotationShape = annotationShapeTypes.includes(className);
+
+      // If clicking on a shape, let its onClick handler deal with selection
+      // The shape's onClick will fire after this and select itself
+      if (isAnnotationShape) {
+        // Check if it's a background Rect (not an annotation)
+        // Background Rect is direct child of Layer, annotation Rects are inside Groups
+        const parent = e.target.parent;
+        const isBackgroundRect = className === 'Rect' && parent?.getClassName() === 'Layer';
+        const isBackgroundImage = className === 'Image';
+
+        if (isBackgroundRect || isBackgroundImage) {
+          // Clicked on background - deselect
+          onAnnotationSelect(null);
+        }
+        // Otherwise it's an annotation shape - let its onClick handle it
+        return;
       }
+
+      // Clicked on Stage, Layer, Group (background), or other non-shape element - deselect
+      onAnnotationSelect(null);
       return;
     }
 
@@ -400,9 +426,11 @@ export function EditorCanvas({
     const pos = stage.getPointerPosition();
     if (!pos) return;
 
-    // Convert to unscaled coordinates (accounting for pan offset)
-    const x = (pos.x - panOffset.x) / scale;
-    const y = (pos.y - panOffset.y) / scale;
+    // Convert to unscaled coordinates (accounting for stage position including pan offset and centering)
+    const stageX = stage.x();
+    const stageY = stage.y();
+    const x = (pos.x - stageX) / scale;
+    const y = (pos.y - stageY) / scale;
 
     // For text tool, create text immediately on click with empty text to trigger edit mode
     if (activeTool === 'text') {
@@ -444,7 +472,7 @@ export function EditorCanvas({
       points: annotationType === 'arrow' || annotationType === 'line' ? [0, 0, 0, 0] : undefined,
     };
     setTempAnnotation(newAnnotation);
-  }, [activeTool, scale, strokeColor, strokeWidth, fontSize, fontStyle, generateId, onAnnotationSelect, onAnnotationAdd, isTransformerNode, spacePressed, handlePanStart, panOffset]);
+  }, [activeTool, scale, strokeColor, strokeWidth, fontSize, fontStyle, generateId, onAnnotationSelect, onAnnotationAdd, isTransformerNode, spacePressed, handlePanStart]);
 
   // Handle mouse move for drawing
   const handleMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -462,8 +490,11 @@ export function EditorCanvas({
     const pos = stage.getPointerPosition();
     if (!pos) return;
 
-    const x = (pos.x - panOffset.x) / scale;
-    const y = (pos.y - panOffset.y) / scale;
+    // Convert to unscaled coordinates (accounting for stage position including pan offset and centering)
+    const stageX = stage.x();
+    const stageY = stage.y();
+    const x = (pos.x - stageX) / scale;
+    const y = (pos.y - stageY) / scale;
 
     const width = x - drawStart.x;
     const height = y - drawStart.y;
@@ -487,7 +518,7 @@ export function EditorCanvas({
         height: Math.abs(height),
       });
     }
-  }, [isDrawing, drawStart, tempAnnotation, scale, isPanning, handlePanMove, panOffset]);
+  }, [isDrawing, drawStart, tempAnnotation, scale, isPanning, handlePanMove]);
 
   // Handle mouse up to complete drawing
   const handleMouseUp = useCallback(() => {
@@ -505,12 +536,19 @@ export function EditorCanvas({
     // Only add if the shape has some size (use Math.abs for arrows/lines with signed dimensions)
     if (Math.abs(tempAnnotation.width) > 5 || Math.abs(tempAnnotation.height) > 5) {
       onAnnotationAdd(tempAnnotation);
+
+      // Auto-switch to select tool after drawing arrow or line for easier selection
+      if ((tempAnnotation.type === 'arrow' || tempAnnotation.type === 'line') && onToolChange) {
+        onToolChange('select');
+        // Auto-select the newly drawn shape
+        onAnnotationSelect(tempAnnotation.id);
+      }
     }
 
     setIsDrawing(false);
     setDrawStart(null);
     setTempAnnotation(null);
-  }, [isDrawing, tempAnnotation, onAnnotationAdd, isPanning, handlePanEnd]);
+  }, [isDrawing, tempAnnotation, onAnnotationAdd, isPanning, handlePanEnd, onToolChange, onAnnotationSelect]);
 
   if (!screenshot) {
     return (
