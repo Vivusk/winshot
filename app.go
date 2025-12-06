@@ -125,17 +125,18 @@ func (a *App) MinimizeToTray() {
 
 // RegionCaptureData holds the fullscreen screenshot and display info for region selection
 type RegionCaptureData struct {
-	Screenshot  *screenshot.CaptureResult `json:"screenshot"`
-	ScreenX     int                       `json:"screenX"`
-	ScreenY     int                       `json:"screenY"`
-	Width       int                       `json:"width"`
-	Height      int                       `json:"height"`
-	ScaleRatio  float64                   `json:"scaleRatio"`  // DPI scale ratio (physical/logical)
-	PhysicalW   int                       `json:"physicalW"`   // Actual screenshot width
-	PhysicalH   int                       `json:"physicalH"`   // Actual screenshot height
+	Screenshot   *screenshot.CaptureResult `json:"screenshot"`
+	ScreenX      int                       `json:"screenX"`
+	ScreenY      int                       `json:"screenY"`
+	Width        int                       `json:"width"`
+	Height       int                       `json:"height"`
+	ScaleRatio   float64                   `json:"scaleRatio"`   // DPI scale ratio (physical/logical)
+	PhysicalW    int                       `json:"physicalW"`    // Actual screenshot width
+	PhysicalH    int                       `json:"physicalH"`    // Actual screenshot height
+	DisplayIndex int                       `json:"displayIndex"` // Index of the captured display
 }
 
-// PrepareRegionCapture prepares for region selection by capturing fullscreen and setting up overlay
+// PrepareRegionCapture prepares for region selection by capturing the active monitor and setting up overlay
 func (a *App) PrepareRegionCapture() (*RegionCaptureData, error) {
 	// Hide the window first so it's not in the screenshot
 	runtime.WindowHide(a.ctx)
@@ -143,39 +144,76 @@ func (a *App) PrepareRegionCapture() (*RegionCaptureData, error) {
 	// Wait for window to fully hide
 	time.Sleep(150 * time.Millisecond)
 
-	// Capture fullscreen screenshot (at physical/native resolution)
-	result, err := screenshot.CaptureFullscreen()
+	// Capture the display where cursor is located (at physical/native resolution)
+	result, displayIndex, err := screenshot.CaptureActiveDisplay()
 	if err != nil {
 		// Show window again on error
 		runtime.WindowShow(a.ctx)
 		return nil, err
 	}
 
+	// Get the physical bounds of the captured display
+	displayBounds := screenshot.GetDisplayBounds(displayIndex)
+	screenX := displayBounds.Min.X
+	screenY := displayBounds.Min.Y
+
 	// Get logical screen info from Wails runtime
 	// Wails ScreenGetAll returns logical (DPI-scaled) dimensions
 	screens, _ := runtime.ScreenGetAll(a.ctx)
-	var primaryScreen runtime.Screen
-	for _, s := range screens {
-		if s.IsPrimary {
-			primaryScreen = s
-			break
+
+	// Calculate logical dimensions based on physical screenshot and DPI
+	// We use the screenshot dimensions directly since they represent the actual captured area
+	logicalWidth := result.Width
+	logicalHeight := result.Height
+	scaleRatio := 1.0
+
+	// Try to find matching screen from Wails to get logical dimensions
+	// This helps handle DPI scaling correctly
+	if len(screens) > 0 {
+		// Find screen that best matches our captured display
+		var matchedScreen *runtime.Screen
+		for i := range screens {
+			s := &screens[i]
+			// Check if this screen's size roughly matches our physical capture
+			// (accounting for potential DPI differences)
+			if s.Size.Width > 0 && s.Size.Height > 0 {
+				// For now, use the screen at the matching index if available
+				if i == displayIndex && i < len(screens) {
+					matchedScreen = s
+					break
+				}
+			}
+		}
+
+		// If we found a match, use its logical dimensions
+		if matchedScreen != nil {
+			logicalWidth = matchedScreen.Size.Width
+			logicalHeight = matchedScreen.Size.Height
+			scaleRatio = float64(result.Width) / float64(logicalWidth)
+			if scaleRatio < 1.0 {
+				scaleRatio = 1.0
+			}
+		} else if len(screens) > 0 {
+			// Fallback: estimate scale from first screen's DPI
+			firstScreen := screens[0]
+			if firstScreen.Size.Width > 0 {
+				estimatedScale := float64(displayBounds.Dx()) / float64(firstScreen.Size.Width)
+				if estimatedScale > 1.0 && estimatedScale < 4.0 {
+					scaleRatio = estimatedScale
+					logicalWidth = int(float64(result.Width) / scaleRatio)
+					logicalHeight = int(float64(result.Height) / scaleRatio)
+				}
+			}
 		}
 	}
-	if primaryScreen.Size.Width == 0 {
-		// Fallback to first screen if no primary found
-		primaryScreen = screens[0]
-	}
 
-	logicalWidth := primaryScreen.Size.Width
-	logicalHeight := primaryScreen.Size.Height
-
-	// Position window at screen origin (primary monitor is typically at 0,0)
-	runtime.WindowSetPosition(a.ctx, 0, 0)
+	// Position window at the captured display's origin
+	runtime.WindowSetPosition(a.ctx, screenX, screenY)
 
 	// Disable min size constraint temporarily
 	runtime.WindowSetMinSize(a.ctx, 0, 0)
 
-	// Set window size to full screen using LOGICAL dimensions
+	// Set window size to match the logical display dimensions
 	runtime.WindowSetSize(a.ctx, logicalWidth, logicalHeight)
 
 	// Make window always on top
@@ -184,21 +222,16 @@ func (a *App) PrepareRegionCapture() (*RegionCaptureData, error) {
 	// Show the window
 	runtime.WindowShow(a.ctx)
 
-	// Calculate DPI scale ratio (physical screenshot size / logical screen size)
-	scaleRatio := float64(result.Width) / float64(logicalWidth)
-	if scaleRatio < 1.0 {
-		scaleRatio = 1.0
-	}
-
 	return &RegionCaptureData{
-		Screenshot:  result,
-		ScreenX:     0,
-		ScreenY:     0,
-		Width:       logicalWidth,
-		Height:      logicalHeight,
-		ScaleRatio:  scaleRatio,
-		PhysicalW:   result.Width,
-		PhysicalH:   result.Height,
+		Screenshot:   result,
+		ScreenX:      screenX,
+		ScreenY:      screenY,
+		Width:        logicalWidth,
+		Height:       logicalHeight,
+		ScaleRatio:   scaleRatio,
+		PhysicalW:    result.Width,
+		PhysicalH:    result.Height,
+		DisplayIndex: displayIndex,
 	}, nil
 }
 
@@ -230,7 +263,7 @@ func (a *App) ShowWindow() {
 	runtime.WindowSetAlwaysOnTop(a.ctx, false)
 }
 
-// CaptureFullscreen captures the entire primary display
+// CaptureFullscreen captures the display where the cursor is currently located
 func (a *App) CaptureFullscreen() (*screenshot.CaptureResult, error) {
 	return screenshot.CaptureFullscreen()
 }
@@ -261,6 +294,11 @@ func (a *App) CaptureWindow(hwnd int) (*screenshot.CaptureResult, error) {
 // GetDisplayCount returns the number of active displays
 func (a *App) GetDisplayCount() int {
 	return screenshot.GetDisplayCount()
+}
+
+// GetActiveDisplayIndex returns the index of the display where the cursor is located
+func (a *App) GetActiveDisplayIndex() int {
+	return screenshot.GetMonitorAtCursor()
 }
 
 // DisplayBounds represents the bounds of a display

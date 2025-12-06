@@ -15,6 +15,8 @@ export function CaptureWindow(arg1:number):Promise<screenshot.CaptureResult>;
 
 export function FinishRegionCapture():Promise<void>;
 
+export function GetActiveDisplayIndex():Promise<number>;
+
 export function GetBackgroundImages():Promise<Array<string>>;
 
 export function GetConfig():Promise<config.Config>;

@@ -22,6 +22,10 @@ export function FinishRegionCapture() {
   return window['go']['main']['App']['FinishRegionCapture']();
 }
 
+export function GetActiveDisplayIndex() {
+  return window['go']['main']['App']['GetActiveDisplayIndex']();
+}
+
 export function GetBackgroundImages() {
   return window['go']['main']['App']['GetBackgroundImages']();
 }

@@ -168,6 +168,7 @@ export namespace main {
 	    scaleRatio: number;
 	    physicalW: number;
 	    physicalH: number;
+	    displayIndex: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new RegionCaptureData(source);
@@ -183,6 +184,7 @@ export namespace main {
 	        this.scaleRatio = source["scaleRatio"];
 	        this.physicalW = source["physicalW"];
 	        this.physicalH = source["physicalH"];
+	        this.displayIndex = source["displayIndex"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
