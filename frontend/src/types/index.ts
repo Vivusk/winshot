@@ -29,6 +29,16 @@ export interface EditorState {
 // Annotation types
 export type AnnotationType = 'rectangle' | 'ellipse' | 'arrow' | 'line' | 'text' | 'spotlight';
 
+// Crop types
+export interface CropArea {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export type CropAspectRatio = 'free' | '16:9' | '4:3' | '1:1' | '9:16' | '3:4';
+
 export interface Annotation {
   id: string;
   type: AnnotationType;
@@ -55,7 +65,7 @@ export interface Annotation {
   dimOpacity?: number; // Opacity of the dimmed area (0-1, default 0.7)
 }
 
-export type EditorTool = 'select' | AnnotationType;
+export type EditorTool = 'select' | 'crop' | AnnotationType;
 
 
 // Output canvas ratio - determines the final export dimensions

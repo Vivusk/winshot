@@ -10,7 +10,7 @@ import { SettingsModal } from './components/settings-modal';
 import { StatusBar } from './components/status-bar';
 import { AnnotationToolbar } from './components/annotation-toolbar';
 import { ExportToolbar } from './components/export-toolbar';
-import { CaptureResult, CaptureMode, WindowInfo, Annotation, EditorTool, OutputRatio } from './types';
+import { CaptureResult, CaptureMode, WindowInfo, Annotation, EditorTool, OutputRatio, CropArea, CropAspectRatio } from './types';
 import {
   CaptureFullscreen,
   CaptureWindow,
@@ -62,6 +62,33 @@ function loadEditorSettings(): EditorSettings {
 // Save settings to localStorage
 function saveEditorSettings(settings: EditorSettings): void {
   localStorage.setItem(EDITOR_SETTINGS_KEY, JSON.stringify(settings));
+}
+
+// Helper to constrain crop area to aspect ratio
+function constrainToAspectRatio(area: CropArea, ratio: CropAspectRatio): CropArea {
+  if (ratio === 'free') return area;
+  // Guard against zero dimensions
+  if (area.width <= 0 || area.height <= 0) return area;
+
+  const ratios: Record<CropAspectRatio, number> = {
+    'free': 0,
+    '16:9': 16 / 9,
+    '4:3': 4 / 3,
+    '1:1': 1,
+    '9:16': 9 / 16,
+    '3:4': 3 / 4,
+  };
+
+  const targetRatio = ratios[ratio];
+  const currentRatio = area.width / area.height;
+
+  if (currentRatio > targetRatio) {
+    // Too wide, adjust width
+    return { ...area, width: area.height * targetRatio };
+  } else {
+    // Too tall, adjust height
+    return { ...area, height: area.width / targetRatio };
+  }
 }
 
 // Helper to copy screenshot to clipboard with format from config
@@ -135,6 +162,12 @@ function App() {
   const [fontSize, setFontSize] = useState(48);
   const [fontStyle, setFontStyle] = useState<'normal' | 'bold' | 'italic' | 'bold italic'>('normal');
 
+  // Crop state
+  const [cropMode, setCropMode] = useState(false);
+  const [cropArea, setCropArea] = useState<CropArea | null>(null);
+  const [cropAspectRatio, setCropAspectRatio] = useState<CropAspectRatio>('free');
+  const [isDrawingCrop, setIsDrawingCrop] = useState(false);
+  const [appliedCrop, setAppliedCrop] = useState<CropArea | null>(null);
 
   // Export state
   const [isExporting, setIsExporting] = useState(false);
@@ -518,6 +551,52 @@ function App() {
     }
   }, [selectedAnnotationId]);
 
+  // Crop handlers
+  const handleCropToolSelect = useCallback(() => {
+    setActiveTool('crop');
+    setCropMode(true);
+    // If previously applied, restore for editing
+    if (appliedCrop) {
+      setCropArea(appliedCrop);
+    }
+  }, [appliedCrop]);
+
+  const handleCropChange = useCallback((area: CropArea) => {
+    setCropArea(area);
+  }, []);
+
+  const handleCropApply = useCallback(() => {
+    if (cropArea) {
+      setAppliedCrop(cropArea);
+      setCropMode(false);
+      setCropArea(null);
+      setActiveTool('select');
+    }
+  }, [cropArea]);
+
+  const handleCropCancel = useCallback(() => {
+    setCropMode(false);
+    setCropArea(null);
+    setIsDrawingCrop(false);
+    setActiveTool('select');
+  }, []);
+
+  const handleCropAspectRatioChange = useCallback((ratio: CropAspectRatio) => {
+    setCropAspectRatio(ratio);
+    // If cropArea exists, constrain to new ratio
+    if (cropArea) {
+      const constrained = constrainToAspectRatio(cropArea, ratio);
+      setCropArea(constrained);
+    }
+  }, [cropArea]);
+
+  const handleCropReset = useCallback(() => {
+    setAppliedCrop(null);
+    setCropArea(null);
+    setCropMode(false);
+    setActiveTool('select');
+  }, []);
+
   // Tool change handler
   const handleToolChange = useCallback((tool: EditorTool) => {
     setActiveTool(tool);
@@ -536,8 +615,13 @@ function App() {
           handleDeleteSelected();
         }
       } else if (e.key === 'Escape') {
-        setSelectedAnnotationId(null);
-        setActiveTool('select');
+        // Cancel crop mode if active
+        if (cropMode) {
+          handleCropCancel();
+        } else {
+          setSelectedAnnotationId(null);
+          setActiveTool('select');
+        }
       } else if (!e.ctrlKey && !e.altKey && !e.metaKey) {
         // Tool shortcuts (single keys without modifiers)
         const key = e.key.toLowerCase();
@@ -560,13 +644,16 @@ function App() {
           case 't':
             handleToolChange('text');
             break;
+          case 'c':
+            handleCropToolSelect();
+            break;
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedAnnotationId, handleDeleteSelected, handleToolChange]);
+  }, [selectedAnnotationId, handleDeleteSelected, handleToolChange, cropMode, handleCropCancel, handleCropToolSelect]);
 
   // Export helpers
   const getCanvasDataUrl = useCallback((format: 'png' | 'jpeg'): string | null => {
