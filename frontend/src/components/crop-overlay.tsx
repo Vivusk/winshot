@@ -1,11 +1,11 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { Group, Rect } from 'react-konva';
 import Konva from 'konva';
 import { CropArea, CropAspectRatio } from '../types';
 
 // Constants
 const MIN_CROP_SIZE = 20;
-const HANDLE_SIZE = 10;
+const HANDLE_SIZE = 14;
 const OVERLAY_OPACITY = 0.5;
 
 // Props interface
@@ -19,6 +19,8 @@ interface CropOverlayProps {
   cropArea: CropArea | null;
   aspectRatio: CropAspectRatio;
   isDrawing: boolean;
+  // Stage scale for coordinate conversion
+  scale: number;
   // Callbacks
   onCropChange: (area: CropArea) => void;
   onCropStart: (area: CropArea) => void;
@@ -27,6 +29,9 @@ interface CropOverlayProps {
 
 // Handle position type
 type HandlePosition = 'tl' | 'tr' | 'bl' | 'br' | 't' | 'b' | 'l' | 'r';
+
+// Drag mode type
+type DragMode = 'none' | 'drawing' | 'moving' | HandlePosition;
 
 // Helper: Constrain crop area to image bounds while maintaining min size
 function constrainToBounds(
@@ -38,30 +43,25 @@ function constrainToBounds(
 ): CropArea {
   const result = { ...area };
 
-  // Ensure minimum size first (before position clamping)
+  // 1. Ensure minimum size
   result.width = Math.max(MIN_CROP_SIZE, result.width);
   result.height = Math.max(MIN_CROP_SIZE, result.height);
 
-  // Clamp position to ensure crop stays within bounds
-  // Adjust x position - ensure crop fits within image
-  if (result.x < imageX) {
-    result.x = imageX;
-  }
-  if (result.x + result.width > imageX + imageWidth) {
-    result.x = Math.max(imageX, imageX + imageWidth - result.width);
-  }
+  // 2. Clamp dimensions to not exceed image bounds
+  result.width = Math.min(result.width, imageWidth);
+  result.height = Math.min(result.height, imageHeight);
 
-  // Adjust y position - ensure crop fits within image
-  if (result.y < imageY) {
-    result.y = imageY;
+  // 3. Clamp position - left/top boundary
+  result.x = Math.max(imageX, result.x);
+  result.y = Math.max(imageY, result.y);
+
+  // 4. Clamp position - right/bottom boundary
+  if (result.x + result.width > imageX + imageWidth) {
+    result.x = imageX + imageWidth - result.width;
   }
   if (result.y + result.height > imageY + imageHeight) {
-    result.y = Math.max(imageY, imageY + imageHeight - result.height);
+    result.y = imageY + imageHeight - result.height;
   }
-
-  // Final width/height clamp (in case image is smaller than MIN_CROP_SIZE)
-  result.width = Math.max(MIN_CROP_SIZE, Math.min(result.width, imageWidth));
-  result.height = Math.max(MIN_CROP_SIZE, Math.min(result.height, imageHeight));
 
   return result;
 }
@@ -101,7 +101,7 @@ function enforceAspectRatio(
   return result;
 }
 
-// Helper: Apply all constraints (bounds + aspect ratio) ensuring ratio is preserved
+// Helper: Apply all constraints (bounds + aspect ratio)
 function applyConstraints(
   area: CropArea,
   imageX: number,
@@ -131,12 +131,11 @@ function applyConstraints(
   if (result.width > maxWidth || result.height > maxHeight) {
     const scaleW = maxWidth / result.width;
     const scaleH = maxHeight / result.height;
-    const scale = Math.min(scaleW, scaleH);
+    const scaleFactor = Math.min(scaleW, scaleH);
 
-    result.width = Math.max(MIN_CROP_SIZE, result.width * scale);
+    result.width = Math.max(MIN_CROP_SIZE, result.width * scaleFactor);
     result.height = result.width / targetRatio;
 
-    // Ensure minimum size while preserving ratio
     if (result.width < MIN_CROP_SIZE) {
       result.width = MIN_CROP_SIZE;
       result.height = result.width / targetRatio;
@@ -160,16 +159,34 @@ function applyConstraints(
   return result;
 }
 
+// Helper: Convert pointer position to canvas coordinates
+function pointerToCanvasCoords(
+  stage: Konva.Stage,
+  pointer: { x: number; y: number },
+  scale: number
+): { x: number; y: number } {
+  const stageX = stage.x();
+  const stageY = stage.y();
+  return {
+    x: (pointer.x - stageX) / scale,
+    y: (pointer.y - stageY) / scale,
+  };
+}
+
 // Sub-component: Darkened overlay (4 rects around crop area)
-interface OverlayRectsProps {
+function DarkenedOverlay({
+  imageX,
+  imageY,
+  imageWidth,
+  imageHeight,
+  cropArea,
+}: {
   imageX: number;
   imageY: number;
   imageWidth: number;
   imageHeight: number;
   cropArea: CropArea;
-}
-
-function DarkenedOverlay({ imageX, imageY, imageWidth, imageHeight, cropArea }: OverlayRectsProps) {
+}) {
   const { x, y, width, height } = cropArea;
 
   return (
@@ -218,186 +235,7 @@ function DarkenedOverlay({ imageX, imageY, imageWidth, imageHeight, cropArea }: 
   );
 }
 
-// Sub-component: Crop frame (draggable rectangle border)
-interface CropFrameProps {
-  cropArea: CropArea;
-  imageX: number;
-  imageY: number;
-  imageWidth: number;
-  imageHeight: number;
-  onDragMove: (x: number, y: number) => void;
-}
-
-function CropFrame({
-  cropArea,
-  imageX,
-  imageY,
-  imageWidth,
-  imageHeight,
-  onDragMove,
-}: CropFrameProps) {
-  const handleDragBound = useCallback(
-    (pos: { x: number; y: number }) => {
-      const maxX = imageX + imageWidth - cropArea.width;
-      const maxY = imageY + imageHeight - cropArea.height;
-
-      return {
-        x: Math.max(imageX, Math.min(pos.x, maxX)),
-        y: Math.max(imageY, Math.min(pos.y, maxY)),
-      };
-    },
-    [imageX, imageY, imageWidth, imageHeight, cropArea.width, cropArea.height]
-  );
-
-  return (
-    <Rect
-      x={cropArea.x}
-      y={cropArea.y}
-      width={cropArea.width}
-      height={cropArea.height}
-      stroke="white"
-      strokeWidth={2}
-      fill="transparent"
-      draggable
-      dragBoundFunc={handleDragBound}
-      onDragMove={(e) => {
-        const node = e.target;
-        onDragMove(node.x(), node.y());
-      }}
-      onDragEnd={(e) => {
-        // Reset position to match state after drag ends
-        const node = e.target;
-        node.x(cropArea.x);
-        node.y(cropArea.y);
-      }}
-    />
-  );
-}
-
-// Sub-component: Resize handles (8 handles at corners and edges)
-interface ResizeHandlesProps {
-  cropArea: CropArea;
-  imageX: number;
-  imageY: number;
-  imageWidth: number;
-  imageHeight: number;
-  aspectRatio: CropAspectRatio;
-  onResize: (newArea: CropArea) => void;
-}
-
-function ResizeHandles({
-  cropArea,
-  imageX,
-  imageY,
-  imageWidth,
-  imageHeight,
-  aspectRatio,
-  onResize,
-}: ResizeHandlesProps) {
-  // Calculate handle positions based on current crop area
-  const getHandlePositions = (area: CropArea): Record<HandlePosition, { cx: number; cy: number }> => ({
-    tl: { cx: area.x, cy: area.y },
-    tr: { cx: area.x + area.width, cy: area.y },
-    bl: { cx: area.x, cy: area.y + area.height },
-    br: { cx: area.x + area.width, cy: area.y + area.height },
-    t: { cx: area.x + area.width / 2, cy: area.y },
-    b: { cx: area.x + area.width / 2, cy: area.y + area.height },
-    l: { cx: area.x, cy: area.y + area.height / 2 },
-    r: { cx: area.x + area.width, cy: area.y + area.height / 2 },
-  });
-
-  const handlePositions = getHandlePositions(cropArea);
-
-  // Handle resize drag - use cropArea directly in callback to avoid stale closure
-  const handleDrag = useCallback(
-    (pos: HandlePosition, newX: number, newY: number, currentArea: CropArea) => {
-      const { x, y, width, height } = currentArea;
-      let newArea = { ...currentArea };
-
-      // Calculate new dimensions based on which handle is dragged
-      switch (pos) {
-        case 'br':
-          newArea.width = Math.max(MIN_CROP_SIZE, newX - x);
-          newArea.height = Math.max(MIN_CROP_SIZE, newY - y);
-          break;
-        case 'bl':
-          newArea.x = Math.min(newX, x + width - MIN_CROP_SIZE);
-          newArea.width = x + width - newArea.x;
-          newArea.height = Math.max(MIN_CROP_SIZE, newY - y);
-          break;
-        case 'tr':
-          newArea.y = Math.min(newY, y + height - MIN_CROP_SIZE);
-          newArea.width = Math.max(MIN_CROP_SIZE, newX - x);
-          newArea.height = y + height - newArea.y;
-          break;
-        case 'tl':
-          newArea.x = Math.min(newX, x + width - MIN_CROP_SIZE);
-          newArea.y = Math.min(newY, y + height - MIN_CROP_SIZE);
-          newArea.width = x + width - newArea.x;
-          newArea.height = y + height - newArea.y;
-          break;
-        case 't':
-          newArea.y = Math.min(newY, y + height - MIN_CROP_SIZE);
-          newArea.height = y + height - newArea.y;
-          break;
-        case 'b':
-          newArea.height = Math.max(MIN_CROP_SIZE, newY - y);
-          break;
-        case 'l':
-          newArea.x = Math.min(newX, x + width - MIN_CROP_SIZE);
-          newArea.width = x + width - newArea.x;
-          break;
-        case 'r':
-          newArea.width = Math.max(MIN_CROP_SIZE, newX - x);
-          break;
-      }
-
-      // Apply all constraints (bounds + aspect ratio)
-      newArea = applyConstraints(newArea, imageX, imageY, imageWidth, imageHeight, aspectRatio, pos);
-
-      onResize(newArea);
-    },
-    [imageX, imageY, imageWidth, imageHeight, aspectRatio, onResize]
-  );
-
-  return (
-    <>
-      {Object.entries(handlePositions).map(([pos, { cx, cy }]) => (
-        <Rect
-          key={pos}
-          x={cx - HANDLE_SIZE / 2}
-          y={cy - HANDLE_SIZE / 2}
-          width={HANDLE_SIZE}
-          height={HANDLE_SIZE}
-          fill="white"
-          stroke="#333"
-          strokeWidth={1}
-          cornerRadius={2}
-          draggable
-          onDragMove={(e) => {
-            const node = e.target;
-            handleDrag(
-              pos as HandlePosition,
-              node.x() + HANDLE_SIZE / 2,
-              node.y() + HANDLE_SIZE / 2,
-              cropArea
-            );
-          }}
-          onDragEnd={(e) => {
-            // Reset handle position to match crop area after drag
-            const node = e.target;
-            const positions = getHandlePositions(cropArea);
-            const handlePos = positions[pos as HandlePosition];
-            node.x(handlePos.cx - HANDLE_SIZE / 2);
-            node.y(handlePos.cy - HANDLE_SIZE / 2);
-          }}
-        />
-      ))}
-    </>
-  );
-}
-
-// Main component: CropOverlay
+// Main component: CropOverlay with unified drag handling
 export function CropOverlay({
   imageX,
   imageY,
@@ -406,21 +244,99 @@ export function CropOverlay({
   cropArea,
   aspectRatio,
   isDrawing,
+  scale,
   onCropChange,
   onCropStart,
   onDrawingChange,
 }: CropOverlayProps) {
+  // Drag state
+  const [dragMode, setDragMode] = useState<DragMode>('none');
+  const dragStartRef = useRef<{
+    mouseX: number;
+    mouseY: number;
+    cropArea: CropArea;
+  } | null>(null);
   const drawStartRef = useRef<{ x: number; y: number } | null>(null);
 
-  // Handle mouse down to start drawing crop region
-  const handleMouseDown = useCallback(
-    (e: Konva.KonvaEventObject<MouseEvent>) => {
-      if (cropArea) return; // Already have crop area
-
+  // Get mouse position in canvas coordinates
+  const getCanvasPos = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent>): { x: number; y: number } | null => {
       const stage = e.target.getStage();
-      if (!stage) return;
+      if (!stage) return null;
+      const pointer = stage.getPointerPosition();
+      if (!pointer) return null;
+      return pointerToCanvasCoords(stage, pointer, scale);
+    },
+    [scale]
+  );
 
-      const pos = stage.getPointerPosition();
+  // Calculate handle positions
+  const getHandlePositions = useCallback((area: CropArea) => ({
+    tl: { x: area.x - HANDLE_SIZE / 2, y: area.y - HANDLE_SIZE / 2 },
+    tr: { x: area.x + area.width - HANDLE_SIZE / 2, y: area.y - HANDLE_SIZE / 2 },
+    bl: { x: area.x - HANDLE_SIZE / 2, y: area.y + area.height - HANDLE_SIZE / 2 },
+    br: { x: area.x + area.width - HANDLE_SIZE / 2, y: area.y + area.height - HANDLE_SIZE / 2 },
+    t: { x: area.x + area.width / 2 - HANDLE_SIZE / 2, y: area.y - HANDLE_SIZE / 2 },
+    b: { x: area.x + area.width / 2 - HANDLE_SIZE / 2, y: area.y + area.height - HANDLE_SIZE / 2 },
+    l: { x: area.x - HANDLE_SIZE / 2, y: area.y + area.height / 2 - HANDLE_SIZE / 2 },
+    r: { x: area.x + area.width - HANDLE_SIZE / 2, y: area.y + area.height / 2 - HANDLE_SIZE / 2 },
+  }), []);
+
+  // Handle resize based on which handle is being dragged
+  const calculateResizedArea = useCallback(
+    (handlePos: HandlePosition, currentPos: { x: number; y: number }, startArea: CropArea): CropArea => {
+      const { x, y, width, height } = startArea;
+      let newArea = { ...startArea };
+
+      switch (handlePos) {
+        case 'br':
+          newArea.width = Math.max(MIN_CROP_SIZE, currentPos.x - x);
+          newArea.height = Math.max(MIN_CROP_SIZE, currentPos.y - y);
+          break;
+        case 'bl':
+          newArea.x = Math.min(currentPos.x, x + width - MIN_CROP_SIZE);
+          newArea.width = x + width - newArea.x;
+          newArea.height = Math.max(MIN_CROP_SIZE, currentPos.y - y);
+          break;
+        case 'tr':
+          newArea.y = Math.min(currentPos.y, y + height - MIN_CROP_SIZE);
+          newArea.width = Math.max(MIN_CROP_SIZE, currentPos.x - x);
+          newArea.height = y + height - newArea.y;
+          break;
+        case 'tl':
+          newArea.x = Math.min(currentPos.x, x + width - MIN_CROP_SIZE);
+          newArea.y = Math.min(currentPos.y, y + height - MIN_CROP_SIZE);
+          newArea.width = x + width - newArea.x;
+          newArea.height = y + height - newArea.y;
+          break;
+        case 't':
+          newArea.y = Math.min(currentPos.y, y + height - MIN_CROP_SIZE);
+          newArea.height = y + height - newArea.y;
+          break;
+        case 'b':
+          newArea.height = Math.max(MIN_CROP_SIZE, currentPos.y - y);
+          break;
+        case 'l':
+          newArea.x = Math.min(currentPos.x, x + width - MIN_CROP_SIZE);
+          newArea.width = x + width - newArea.x;
+          break;
+        case 'r':
+          newArea.width = Math.max(MIN_CROP_SIZE, currentPos.x - x);
+          break;
+      }
+
+      return applyConstraints(newArea, imageX, imageY, imageWidth, imageHeight, aspectRatio, handlePos);
+    },
+    [imageX, imageY, imageWidth, imageHeight, aspectRatio]
+  );
+
+  // Start drawing a new crop region
+  const handleDrawingStart = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent>) => {
+      if (cropArea) return; // Already have a crop area
+      e.cancelBubble = true;
+
+      const pos = getCanvasPos(e);
       if (!pos) return;
 
       // Check if click is within image bounds
@@ -434,45 +350,122 @@ export function CropOverlay({
       }
 
       drawStartRef.current = pos;
+      setDragMode('drawing');
       onDrawingChange(true);
     },
-    [cropArea, imageX, imageY, imageWidth, imageHeight, onDrawingChange]
+    [cropArea, getCanvasPos, imageX, imageY, imageWidth, imageHeight, onDrawingChange]
   );
 
-  // Handle mouse move during drawing
-  const handleMouseMove = useCallback(
+  // Start moving the crop frame
+  const handleFrameMouseDown = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
-      if (!isDrawing || !drawStartRef.current) return;
+      if (!cropArea) return;
+      e.cancelBubble = true;
 
-      const stage = e.target.getStage();
-      if (!stage) return;
-
-      const pos = stage.getPointerPosition();
+      const pos = getCanvasPos(e);
       if (!pos) return;
 
-      // Calculate crop area from drag
-      const startX = Math.min(drawStartRef.current.x, pos.x);
-      const startY = Math.min(drawStartRef.current.y, pos.y);
-      const width = Math.abs(pos.x - drawStartRef.current.x);
-      const height = Math.abs(pos.y - drawStartRef.current.y);
-
-      let newArea: CropArea = { x: startX, y: startY, width, height };
-      newArea = constrainToBounds(newArea, imageX, imageY, imageWidth, imageHeight);
-
-      onCropStart(newArea);
+      dragStartRef.current = {
+        mouseX: pos.x,
+        mouseY: pos.y,
+        cropArea: { ...cropArea },
+      };
+      setDragMode('moving');
     },
-    [isDrawing, imageX, imageY, imageWidth, imageHeight, onCropStart]
+    [cropArea, getCanvasPos]
   );
 
-  // Handle mouse up to finish drawing
+  // Start resizing via a handle
+  const handleHandleMouseDown = useCallback(
+    (handlePos: HandlePosition) => (e: Konva.KonvaEventObject<MouseEvent>) => {
+      if (!cropArea) return;
+      e.cancelBubble = true;
+
+      const pos = getCanvasPos(e);
+      if (!pos) return;
+
+      dragStartRef.current = {
+        mouseX: pos.x,
+        mouseY: pos.y,
+        cropArea: { ...cropArea },
+      };
+      setDragMode(handlePos);
+    },
+    [cropArea, getCanvasPos]
+  );
+
+  // Handle mouse move for all drag operations
+  const handleMouseMove = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent>) => {
+      const pos = getCanvasPos(e);
+      if (!pos) return;
+
+      if (dragMode === 'drawing' && drawStartRef.current) {
+        // Drawing new crop region
+        const startX = Math.min(drawStartRef.current.x, pos.x);
+        const startY = Math.min(drawStartRef.current.y, pos.y);
+        const width = Math.abs(pos.x - drawStartRef.current.x);
+        const height = Math.abs(pos.y - drawStartRef.current.y);
+
+        let newArea: CropArea = { x: startX, y: startY, width, height };
+        newArea = constrainToBounds(newArea, imageX, imageY, imageWidth, imageHeight);
+        onCropStart(newArea);
+      } else if (dragMode === 'moving' && dragStartRef.current) {
+        // Moving crop frame - calculate delta from drag start
+        const deltaX = pos.x - dragStartRef.current.mouseX;
+        const deltaY = pos.y - dragStartRef.current.mouseY;
+
+        const startArea = dragStartRef.current.cropArea;
+        let newX = startArea.x + deltaX;
+        let newY = startArea.y + deltaY;
+
+        // Constrain to image bounds
+        newX = Math.max(imageX, Math.min(newX, imageX + imageWidth - startArea.width));
+        newY = Math.max(imageY, Math.min(newY, imageY + imageHeight - startArea.height));
+
+        onCropChange({ ...startArea, x: newX, y: newY });
+      } else if (dragMode !== 'none' && dragStartRef.current) {
+        // Resizing via handle
+        const handlePos = dragMode as HandlePosition;
+        const newArea = calculateResizedArea(handlePos, pos, dragStartRef.current.cropArea);
+        onCropChange(newArea);
+      }
+    },
+    [dragMode, getCanvasPos, imageX, imageY, imageWidth, imageHeight, onCropStart, onCropChange, calculateResizedArea]
+  );
+
+  // Handle mouse up to end all drag operations
   const handleMouseUp = useCallback(() => {
-    if (isDrawing) {
+    if (dragMode === 'drawing') {
       onDrawingChange(false);
       drawStartRef.current = null;
     }
-  }, [isDrawing, onDrawingChange]);
+    dragStartRef.current = null;
+    setDragMode('none');
+  }, [dragMode, onDrawingChange]);
 
-  // No crop area yet - render invisible rect to capture mouse events
+  // Get cursor based on current state
+  const getCursor = useCallback((handlePos?: HandlePosition): string => {
+    if (handlePos) {
+      switch (handlePos) {
+        case 'tl':
+        case 'br':
+          return 'nwse-resize';
+        case 'tr':
+        case 'bl':
+          return 'nesw-resize';
+        case 't':
+        case 'b':
+          return 'ns-resize';
+        case 'l':
+        case 'r':
+          return 'ew-resize';
+      }
+    }
+    return dragMode === 'moving' ? 'move' : 'crosshair';
+  }, [dragMode]);
+
+  // No crop area yet - render drawing area
   if (!cropArea) {
     return (
       <Rect
@@ -481,16 +474,34 @@ export function CropOverlay({
         width={imageWidth}
         height={imageHeight}
         fill="transparent"
-        onMouseDown={handleMouseDown}
+        onMouseDown={handleDrawingStart}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
       />
     );
   }
 
+  const handlePositions = getHandlePositions(cropArea);
+
   // Render crop overlay with frame and handles
   return (
-    <Group>
+    <Group
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+    >
+      {/* Full image area rect to capture events everywhere */}
+      <Rect
+        x={imageX}
+        y={imageY}
+        width={imageWidth}
+        height={imageHeight}
+        fill="transparent"
+        listening={true}
+      />
+
+      {/* Darkened overlay */}
       <DarkenedOverlay
         imageX={imageX}
         imageY={imageY}
@@ -498,23 +509,36 @@ export function CropOverlay({
         imageHeight={imageHeight}
         cropArea={cropArea}
       />
-      <CropFrame
-        cropArea={cropArea}
-        imageX={imageX}
-        imageY={imageY}
-        imageWidth={imageWidth}
-        imageHeight={imageHeight}
-        onDragMove={(x, y) => onCropChange({ ...cropArea, x, y })}
+
+      {/* Crop frame - NO draggable prop, we handle drag manually */}
+      <Rect
+        x={cropArea.x}
+        y={cropArea.y}
+        width={cropArea.width}
+        height={cropArea.height}
+        stroke="white"
+        strokeWidth={2}
+        fill="transparent"
+        onMouseDown={handleFrameMouseDown}
       />
-      <ResizeHandles
-        cropArea={cropArea}
-        imageX={imageX}
-        imageY={imageY}
-        imageWidth={imageWidth}
-        imageHeight={imageHeight}
-        aspectRatio={aspectRatio}
-        onResize={onCropChange}
-      />
+
+      {/* Resize handles - NO draggable prop, we handle drag manually */}
+      {(Object.entries(handlePositions) as [HandlePosition, { x: number; y: number }][]).map(
+        ([pos, { x, y }]) => (
+          <Rect
+            key={pos}
+            x={x}
+            y={y}
+            width={HANDLE_SIZE}
+            height={HANDLE_SIZE}
+            fill="white"
+            stroke="#0066ff"
+            strokeWidth={2}
+            cornerRadius={2}
+            onMouseDown={handleHandleMouseDown(pos)}
+          />
+        )
+      )}
     </Group>
   );
 }

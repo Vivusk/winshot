@@ -672,9 +672,43 @@ function App() {
     if (!stage) return null;
 
     const mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png';
-    const dataUrl = stage.toDataURL({ mimeType, quality: 0.95 });
+
+    // Save current stage transform
+    const oldScaleX = stage.scaleX();
+    const oldScaleY = stage.scaleY();
+    const oldX = stage.x();
+    const oldY = stage.y();
+
+    // Reset stage transform for accurate export at 1:1 scale
+    stage.scaleX(1);
+    stage.scaleY(1);
+    stage.x(0);
+    stage.y(0);
+
+    let dataUrl: string;
+
+    // If crop is applied, clip to crop region
+    if (appliedCrop) {
+      dataUrl = stage.toDataURL({
+        mimeType,
+        quality: 0.95,
+        x: appliedCrop.x,
+        y: appliedCrop.y,
+        width: appliedCrop.width,
+        height: appliedCrop.height,
+      });
+    } else {
+      dataUrl = stage.toDataURL({ mimeType, quality: 0.95 });
+    }
+
+    // Restore stage transform
+    stage.scaleX(oldScaleX);
+    stage.scaleY(oldScaleY);
+    stage.x(oldX);
+    stage.y(oldY);
+
     return dataUrl;
-  }, []);
+  }, [appliedCrop]);
 
   const getBase64FromDataUrl = (dataUrl: string): string => {
     return dataUrl.split(',')[1];
@@ -748,7 +782,34 @@ function App() {
     setStatusMessage('Copying to clipboard...');
 
     try {
-      const canvas = stage.toCanvas();
+      // Save current stage transform
+      const oldScaleX = stage.scaleX();
+      const oldScaleY = stage.scaleY();
+      const oldX = stage.x();
+      const oldY = stage.y();
+
+      // Reset stage transform for accurate export at 1:1 scale
+      stage.scaleX(1);
+      stage.scaleY(1);
+      stage.x(0);
+      stage.y(0);
+
+      // If crop is applied, clip to crop region
+      const canvas = appliedCrop
+        ? stage.toCanvas({
+            x: appliedCrop.x,
+            y: appliedCrop.y,
+            width: appliedCrop.width,
+            height: appliedCrop.height,
+          })
+        : stage.toCanvas();
+
+      // Restore stage transform
+      stage.scaleX(oldScaleX);
+      stage.scaleY(oldScaleY);
+      stage.x(oldX);
+      stage.y(oldY);
+
       const blob = await new Promise<Blob | null>((resolve) => {
         canvas.toBlob(resolve, 'image/png');
       });
@@ -771,7 +832,7 @@ function App() {
 
     setIsExporting(false);
     setTimeout(() => setStatusMessage(undefined), 2000);
-  }, []);
+  }, [appliedCrop]);
 
   // Keyboard shortcuts for export and import
   useEffect(() => {

@@ -389,6 +389,11 @@ export function EditorCanvas({
       return;
     }
 
+    // Skip annotation handling when crop tool is active - CropOverlay handles its own events
+    if (activeTool === 'crop') {
+      return;
+    }
+
     if (activeTool === 'select') {
       // Don't deselect if clicking on Transformer handles (resize/rotate anchors)
       if (isTransformerNode(e.target)) {
@@ -747,6 +752,7 @@ export function EditorCanvas({
                 cropArea={cropArea}
                 aspectRatio={cropAspectRatio}
                 isDrawing={isDrawingCrop}
+                scale={scale}
                 onCropChange={onCropChange}
                 onCropStart={onCropStart}
                 onDrawingChange={onDrawingCropChange}
