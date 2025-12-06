@@ -2,9 +2,10 @@ import { useRef, useState, useEffect, useCallback } from 'react';
 import { Stage, Layer, Image as KonvaImage, Rect, Group } from 'react-konva';
 import useImage from 'use-image';
 import Konva from 'konva';
-import { CaptureResult, Annotation, AnnotationType, EditorTool, OutputRatio } from '../types';
+import { CaptureResult, Annotation, AnnotationType, EditorTool, OutputRatio, CropArea, CropAspectRatio } from '../types';
 import { AnnotationShapes } from './annotation-shapes';
 import { SpotlightOverlay } from './spotlight-overlay';
+import { CropOverlay } from './crop-overlay';
 import { ImageIcon } from 'lucide-react';
 
 interface EditorCanvasProps {
@@ -27,6 +28,15 @@ interface EditorCanvasProps {
   onAnnotationSelect: (id: string | null) => void;
   onAnnotationUpdate: (id: string, updates: Partial<Annotation>) => void;
   onToolChange?: (tool: EditorTool) => void;
+  // Crop props
+  cropMode: boolean;
+  cropArea: CropArea | null;
+  cropAspectRatio: CropAspectRatio;
+  isDrawingCrop: boolean;
+  appliedCrop: CropArea | null;
+  onCropChange: (area: CropArea) => void;
+  onCropStart: (area: CropArea) => void;
+  onDrawingCropChange: (isDrawing: boolean) => void;
 }
 
 // Helper to parse ratio string into numeric ratio
@@ -168,6 +178,15 @@ export function EditorCanvas({
   onAnnotationSelect,
   onAnnotationUpdate,
   onToolChange,
+  // Crop props
+  cropMode,
+  cropArea,
+  cropAspectRatio,
+  isDrawingCrop,
+  appliedCrop,
+  onCropChange,
+  onCropStart,
+  onDrawingCropChange,
 }: EditorCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const internalStageRef = useRef<Konva.Stage>(null);
@@ -717,6 +736,22 @@ export function EditorCanvas({
               totalWidth={totalWidth}
               totalHeight={totalHeight}
             />
+
+            {/* Crop overlay - visible when crop tool is active */}
+            {cropMode && (
+              <CropOverlay
+                imageX={actualPaddingX}
+                imageY={actualPaddingY}
+                imageWidth={innerWidth}
+                imageHeight={innerHeight}
+                cropArea={cropArea}
+                aspectRatio={cropAspectRatio}
+                isDrawing={isDrawingCrop}
+                onCropChange={onCropChange}
+                onCropStart={onCropStart}
+                onDrawingChange={onDrawingCropChange}
+              />
+            )}
           </Layer>
         </Stage>
         </div>

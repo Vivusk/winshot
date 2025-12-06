@@ -10,6 +10,7 @@ import { SettingsModal } from './components/settings-modal';
 import { StatusBar } from './components/status-bar';
 import { AnnotationToolbar } from './components/annotation-toolbar';
 import { ExportToolbar } from './components/export-toolbar';
+import { CropToolbar } from './components/crop-toolbar';
 import { CaptureResult, CaptureMode, WindowInfo, Annotation, EditorTool, OutputRatio, CropArea, CropAspectRatio } from './types';
 import {
   CaptureFullscreen,
@@ -599,8 +600,18 @@ function App() {
 
   // Tool change handler
   const handleToolChange = useCallback((tool: EditorTool) => {
-    setActiveTool(tool);
-  }, []);
+    if (tool === 'crop') {
+      handleCropToolSelect();
+    } else {
+      setActiveTool(tool);
+      // Exit crop mode if switching to another tool
+      if (cropMode) {
+        setCropMode(false);
+        setCropArea(null);
+        setIsDrawingCrop(false);
+      }
+    }
+  }, [cropMode, handleCropToolSelect]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -803,7 +814,7 @@ function App() {
         onImportImage={handleImportImage}
       />
 
-      {screenshot && (
+      {screenshot && !cropMode && (
         <>
           <AnnotationToolbar
             activeTool={activeTool}
@@ -822,6 +833,20 @@ function App() {
             selectedAnnotation={selectedAnnotationId ? annotations.find(a => a.id === selectedAnnotationId) : undefined}
           />
         </>
+      )}
+
+      {screenshot && cropMode && (
+        <div className="flex justify-center py-2">
+          <CropToolbar
+            aspectRatio={cropAspectRatio}
+            onAspectRatioChange={handleCropAspectRatioChange}
+            onApply={handleCropApply}
+            onCancel={handleCropCancel}
+            onReset={handleCropReset}
+            canApply={!!cropArea && cropArea.width >= 20 && cropArea.height >= 20}
+            canReset={!!appliedCrop}
+          />
+        </div>
       )}
 
       <div className="flex flex-1 overflow-hidden">
@@ -844,6 +869,15 @@ function App() {
           onAnnotationSelect={handleAnnotationSelect}
           onAnnotationUpdate={handleAnnotationUpdate}
           onToolChange={handleToolChange}
+          // Crop props
+          cropMode={cropMode}
+          cropArea={cropArea}
+          cropAspectRatio={cropAspectRatio}
+          isDrawingCrop={isDrawingCrop}
+          appliedCrop={appliedCrop}
+          onCropChange={handleCropChange}
+          onCropStart={handleCropChange}
+          onDrawingCropChange={setIsDrawingCrop}
         />
 
         {screenshot && (
