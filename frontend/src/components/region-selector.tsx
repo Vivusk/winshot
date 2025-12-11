@@ -126,16 +126,19 @@ export function RegionSelector({
 
   return (
     <div
-      className={`fixed inset-0 z-[9999] select-none ${spacePressed ? 'cursor-move' : 'cursor-crosshair'}`}
+      className={`fixed z-[9999] select-none ${spacePressed ? 'cursor-move' : 'cursor-crosshair'}`}
       style={{
-        // Use viewport units to fill the entire window regardless of DPI scaling
-        width: '100vw',
-        height: '100vh',
+        // Position at 0,0 since Wails window is already positioned at virtual origin
+        left: 0,
+        top: 0,
+        // Use actual virtual desktop dimensions instead of viewport units
+        width: screenWidth,
+        height: screenHeight,
         background: screenshotData
           ? `url(data:image/png;base64,${screenshotData}) no-repeat 0 0`
           : 'rgba(0, 0, 0, 0.3)',
-        // Scale the physical screenshot to fit the viewport (handles DPI scaling)
-        backgroundSize: '100vw 100vh',
+        // Scale the physical screenshot to fit the window dimensions
+        backgroundSize: `${screenWidth}px ${screenHeight}px`,
       }}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
@@ -208,8 +211,8 @@ export function RegionSelector({
                 ? `url(data:image/png;base64,${screenshotData}) no-repeat`
                 : 'transparent',
               backgroundPosition: `-${selectionX}px -${selectionY}px`,
-              // Use viewport units to match the main background scaling
-              backgroundSize: '100vw 100vh',
+              // Use actual dimensions to match the main background scaling
+              backgroundSize: `${screenWidth}px ${screenHeight}px`,
             }}
           />
 

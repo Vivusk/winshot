@@ -150,6 +150,14 @@ func (a *App) OnBeforeClose(ctx context.Context) bool {
 	return false // Allow normal close
 }
 
+// VirtualScreenBounds represents the combined bounds of all monitors
+type VirtualScreenBounds struct {
+	X      int `json:"x"`      // Can be negative (monitor left of primary)
+	Y      int `json:"y"`      // Can be negative (monitor above primary)
+	Width  int `json:"width"`
+	Height int `json:"height"`
+}
+
 // RegionCaptureData holds the fullscreen screenshot and display info for region selection
 type RegionCaptureData struct {
 	Screenshot   *screenshot.CaptureResult `json:"screenshot"`
@@ -163,7 +171,7 @@ type RegionCaptureData struct {
 	DisplayIndex int                       `json:"displayIndex"` // Index of the captured display
 }
 
-// PrepareRegionCapture prepares for region selection by capturing the active monitor and setting up overlay
+// PrepareRegionCapture prepares for region selection by capturing all monitors and setting up overlay
 func (a *App) PrepareRegionCapture() (*RegionCaptureData, error) {
 	// Set capturing flag to prevent resize events from overwriting saved size
 	a.isCapturing = true
@@ -192,76 +200,35 @@ func (a *App) PrepareRegionCapture() (*RegionCaptureData, error) {
 	// Wait for window to fully hide (350ms needed for Windows DWM compositor)
 	time.Sleep(350 * time.Millisecond)
 
-	// Capture the display where cursor is located (at physical/native resolution)
-	result, displayIndex, err := screenshot.CaptureActiveDisplay()
+	// Capture entire virtual screen (all monitors combined)
+	result, err := screenshot.CaptureVirtualScreen()
 	if err != nil {
 		// Show window again on error
 		runtime.WindowShow(a.ctx)
 		return nil, err
 	}
 
-	// Get the physical bounds of the captured display
-	displayBounds := screenshot.GetDisplayBounds(displayIndex)
-	screenX := displayBounds.Min.X
-	screenY := displayBounds.Min.Y
+	// Get the virtual screen bounds (combined bounds of all monitors)
+	screenX, screenY, virtualWidth, virtualHeight := screenshot.GetVirtualScreenBounds()
 
-	// Get logical screen info from Wails runtime
-	// Wails ScreenGetAll returns logical (DPI-scaled) dimensions
-	screens, _ := runtime.ScreenGetAll(a.ctx)
+	// Calculate logical dimensions - use virtual bounds directly
+	// The screenshot captures at physical pixel resolution
+	logicalWidth := virtualWidth
+	logicalHeight := virtualHeight
 
-	// Calculate logical dimensions based on physical screenshot and DPI
-	// We use the screenshot dimensions directly since they represent the actual captured area
-	logicalWidth := result.Width
-	logicalHeight := result.Height
-	scaleRatio := 1.0
-
-	// Try to find matching screen from Wails to get logical dimensions
-	// This helps handle DPI scaling correctly
-	if len(screens) > 0 {
-		// Find screen that best matches our captured display
-		var matchedScreen *runtime.Screen
-		for i := range screens {
-			s := &screens[i]
-			// Check if this screen's size roughly matches our physical capture
-			// (accounting for potential DPI differences)
-			if s.Size.Width > 0 && s.Size.Height > 0 {
-				// For now, use the screen at the matching index if available
-				if i == displayIndex && i < len(screens) {
-					matchedScreen = s
-					break
-				}
-			}
-		}
-
-		// If we found a match, use its logical dimensions
-		if matchedScreen != nil {
-			logicalWidth = matchedScreen.Size.Width
-			logicalHeight = matchedScreen.Size.Height
-			scaleRatio = float64(result.Width) / float64(logicalWidth)
-			if scaleRatio < 1.0 {
-				scaleRatio = 1.0
-			}
-		} else if len(screens) > 0 {
-			// Fallback: estimate scale from first screen's DPI
-			firstScreen := screens[0]
-			if firstScreen.Size.Width > 0 {
-				estimatedScale := float64(displayBounds.Dx()) / float64(firstScreen.Size.Width)
-				if estimatedScale > 1.0 && estimatedScale < 4.0 {
-					scaleRatio = estimatedScale
-					logicalWidth = int(float64(result.Width) / scaleRatio)
-					logicalHeight = int(float64(result.Height) / scaleRatio)
-				}
-			}
-		}
+	// Calculate scale ratio between physical screenshot and logical window size
+	scaleRatio := float64(result.Width) / float64(logicalWidth)
+	if scaleRatio < 1.0 {
+		scaleRatio = 1.0
 	}
 
-	// Position window at the captured display's origin
+	// Position window at the virtual screen origin (can be negative)
 	runtime.WindowSetPosition(a.ctx, screenX, screenY)
 
 	// Disable min size constraint temporarily
 	runtime.WindowSetMinSize(a.ctx, 0, 0)
 
-	// Set window size to match the logical display dimensions
+	// Set window size to match the virtual desktop dimensions
 	runtime.WindowSetSize(a.ctx, logicalWidth, logicalHeight)
 
 	// Make window always on top
@@ -279,7 +246,7 @@ func (a *App) PrepareRegionCapture() (*RegionCaptureData, error) {
 		ScaleRatio:   scaleRatio,
 		PhysicalW:    result.Width,
 		PhysicalH:    result.Height,
-		DisplayIndex: displayIndex,
+		DisplayIndex: 0, // No longer relevant for multi-monitor
 	}, nil
 }
 
@@ -299,13 +266,18 @@ func (a *App) FinishRegionCapture() {
 		width = 1200
 		height = 800
 	}
+
+	// First restore position, then size to ensure correct placement
+	// This prevents Windows from auto-adjusting position when resizing
+	runtime.WindowSetPosition(a.ctx, a.preCaptureX, a.preCaptureY)
+
+	// Small delay to let Windows process position change
+	time.Sleep(50 * time.Millisecond)
+
 	runtime.WindowSetSize(a.ctx, width, height)
 
 	// Clear capturing flag to allow resize tracking again
 	a.isCapturing = false
-
-	// Restore window to original position
-	runtime.WindowSetPosition(a.ctx, a.preCaptureX, a.preCaptureY)
 }
 
 // ShowWindow shows the main window
@@ -351,6 +323,12 @@ func (a *App) GetDisplayCount() int {
 // GetActiveDisplayIndex returns the index of the display where the cursor is located
 func (a *App) GetActiveDisplayIndex() int {
 	return screenshot.GetMonitorAtCursor()
+}
+
+// GetVirtualScreenBounds returns the combined bounds of all monitors (virtual desktop)
+func (a *App) GetVirtualScreenBounds() VirtualScreenBounds {
+	x, y, w, h := screenshot.GetVirtualScreenBounds()
+	return VirtualScreenBounds{X: x, Y: y, Width: w, Height: h}
 }
 
 // DisplayBounds represents the bounds of a display
