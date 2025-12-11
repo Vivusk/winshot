@@ -48,7 +48,23 @@ export function TitleBar({ title = 'WinShot', onMinimize }: TitleBarProps) {
       >
         {/* Minimize button */}
         <button
-          onClick={() => WindowMinimise()}
+          onClick={async () => {
+            try {
+              const cfg = await GetConfig();
+              if (cfg.startup?.closeToTray) {
+                // Close to tray instead of minimize when option is enabled
+                if (onMinimize) {
+                  onMinimize();
+                } else {
+                  WindowHide();
+                }
+              } else {
+                WindowMinimise();
+              }
+            } catch {
+              WindowMinimise();
+            }
+          }}
           className="w-11 h-full flex items-center justify-center text-slate-400
                      hover:bg-white/10 hover:text-white transition-all duration-200"
           title="Minimize"
