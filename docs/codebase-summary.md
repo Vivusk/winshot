@@ -1,6 +1,6 @@
 # WinShot - Codebase Summary
 
-**Date:** 2025-12-03 | **Version:** 1.0
+**Date:** 2025-12-12 | **Version:** 1.1
 
 ---
 
@@ -58,6 +58,10 @@ D:\www\winshot/
 │   │   └── startup.go              # Windows startup registry
 │   ├── hotkeys/
 │   │   └── hotkeys.go              # RegisterHotKey() implementation
+│   ├── overlay/
+│   │   ├── types.go                # Win32 constants + GDI structures
+│   │   ├── overlay.go              # Native overlay manager + message loop
+│   │   └── draw.go                 # GDI drawing with DIB double buffering
 │   ├── screenshot/
 │   │   ├── capture.go              # Multi-display screen capture
 │   │   ├── window.go               # Window capture + DPI handling
@@ -77,7 +81,7 @@ D:\www\winshot/
 
 ---
 
-## Go Backend (~2,300 LOC)
+## Go Backend (~3,100 LOC)
 
 ### Package: `internal/config`
 **Files:** config.go (80 LOC), startup.go (40 LOC)
@@ -136,6 +140,71 @@ const (
 - `RegisterHotkey()` - Register single hotkey
 - `Start()` - Begin listening
 - `Stop()` - Stop listening gracefully
+
+### Package: `internal/overlay`
+**Files:** types.go (150 LOC), overlay.go (400 LOC), draw.go (300 LOC)
+
+Implements native Win32 layered window for region selection overlay with high-performance GDI rendering.
+
+**Key Components:**
+
+1. **Window Management (overlay.go)**
+   - Native layered window with `WS_EX_LAYERED` style for transparency support
+   - Thread-safe message loop bound to OS thread via `runtime.LockOSThread()`
+   - Command channel for async control (Show, Hide, Stop)
+   - Class registration with custom window procedure callback
+
+2. **GDI Drawing (draw.go)**
+   - 32-bit DIB (Device-Independent Bitmap) double buffering
+   - Top-down DIB creation with negative height for proper pixel ordering
+   - Direct pixel access via unsafe pointers for fast drawing
+   - Zero-copy rendering to overlay via UpdateLayeredWindow
+
+3. **Key Data Types (types.go)**
+   ```go
+   type Selection struct {
+     StartX, StartY int  // Drag start coordinates
+     EndX, EndY     int  // Drag end coordinates
+     IsDragging     bool
+     SpaceHeld      bool // For repositioning selection
+   }
+
+   type DrawContext struct {
+     HMemDC     uintptr       // Memory device context
+     hBitmap    uintptr       // DIB bitmap handle
+     pixels     unsafe.Pointer // Direct pixel buffer access
+     width      int
+     height     int
+   }
+   ```
+
+4. **Drawing Operations**
+   - `DrawOverlay()` - Renders darkened overlay with selection bounds
+   - `drawScreenshot()` - Blits captured screenshot to DIB
+   - `fillOverlay()` - Semi-transparent dark overlay (50% alpha)
+   - `clearRegion()` - Reveals screenshot in selection area
+   - `drawSelectionBorder()` - Blue selection rectangle
+   - `drawCornerHandles()` - Resize handles at corners
+   - `drawDimensionText()` - Width x Height label
+
+5. **Threading Model**
+   - Dedicated OS thread for message loop (Win32 requirement)
+   - Channel-based command queue for thread-safe Show/Hide/Stop
+   - SetCapture/ReleaseCapture for exclusive mouse input
+   - Blocks on PeekMessageW until user interaction or stop command
+
+6. **Performance Optimizations**
+   - DIB double buffering avoids flicker
+   - Direct pixel manipulation instead of GDI drawing for screenshot
+   - Minimal redraws - only on selection change
+   - Fast alpha blending via UpdateLayeredWindow with AC_SRC_ALPHA
+
+**Entry Points:**
+- `NewManager()` - Create overlay manager
+- `Start()` - Initialize OS thread and window
+- `Show(screenshot, bounds, scaleRatio)` - Display overlay with async result
+- `Hide()` - Hide overlay (user cancelled)
+- `Stop()` - Shutdown and cleanup
 
 ### Package: `internal/screenshot`
 **Files:** capture.go (150 LOC), window.go (90 LOC), clipboard.go (200 LOC)
@@ -205,20 +274,36 @@ Window enumeration via `EnumWindows()` callback.
 - `EnumVisibleWindows()` → []WindowInfo
 
 ### Root: `app.go`
-**File:** app.go (500 LOC, 3,515 tokens)
+**File:** app.go (~550 LOC)
 
 Central App struct with all Wails-bound methods called from frontend.
 
-**Key Methods (~28 total):**
+**App Struct Fields:**
+```go
+type App struct {
+  ctx              context.Context
+  hotkeyManager    *hotkeys.HotkeyManager
+  overlayManager   *overlay.Manager        // New: native overlay window
+  trayIcon         *tray.TrayIcon
+  config           *config.Config
+  lastWidth, lastHeight int                // Tracked for persistence
+  preCaptureWidth, preCaptureHeight int    // Pre-capture size
+  preCaptureX, preCaptureY int             // Pre-capture position
+  isCapturing      bool                    // Prevent resize during capture
+  isWindowHidden   bool                    // Track visibility state (new)
+}
+```
+
+**Key Methods (~30 total):**
 ```go
 // Capture operations
 CaptureFullscreen()
 CaptureWindow(handle int)
 GetClipboardImage()
-PrepareRegionCapture()               // Updated: multi-monitor support
-FinishRegionCapture(x, y, w, h int)  // Updated: window position restore
-CaptureVirtualScreen()               // New: capture extended displays
-GetVirtualScreenBounds()             // New: get combined monitor bounds
+PrepareRegionCapture()
+FinishRegionCapture(x, y, w, h int)
+CaptureVirtualScreen()
+GetVirtualScreenBounds()
 
 // File operations
 SaveImage(data, path, filename string)
@@ -239,8 +324,15 @@ UpdateWindowSize(width, height)
 ```
 
 **Lifecycle:**
-- `startup(ctx)` - Initialize hotkey manager, tray icon, load config
-- `shutdown(ctx)` - Cleanup resources, save window size
+- `startup(ctx)` - Initialize overlay manager, hotkey manager, tray icon, load config
+- `shutdown(ctx)` - Cleanup overlay, hotkeys, tray; save window size
+
+**Notable Implementation Details:**
+- Overlay manager started before hotkey listener (native overlay takes priority)
+- Window visibility state tracked via `isWindowHidden` flag
+- SetAlwaysOnTop toggle refreshes window z-order when showing from tray
+- UpdateWindowSize skips updates during capture (preserves pre-capture dimensions)
+- Pre-capture position saved for window restoration after region selection
 
 ---
 
@@ -304,7 +396,7 @@ Central state management and orchestration.
 - Canvas stage ref management with Konva
 - Styled canvas auto-copy to clipboard on capture completion (if enabled in config)
 
-### Components (14 total)
+### Components (13 total)
 
 **Toolbars (4 files):**
 - `capture-toolbar.tsx` - Fullscreen/Region/Window buttons
@@ -317,19 +409,18 @@ Central state management and orchestration.
 - `settings-panel.tsx` - Editor settings (padding, radius, shadow, bg)
 - `title-bar.tsx` - Minimize/settings/close + drag
 
-**Selectors (3 files):**
-- `region-selector.tsx` - Drag-to-select region UI
+**Selectors (2 files):**
 - `window-picker.tsx` - Window enumeration + preview
 - `hotkey-input.tsx` - Custom hotkey binding UI
+- *(region-selector.tsx removed - replaced by native overlay)*
 
 **Canvas & Drawing (3 files):**
 - `editor-canvas.tsx` - Konva Stage wrapper (15KB)
 - `annotation-shapes.tsx` - 5 shape types: Rectangle, Ellipse, Arrow, Line, Text (19KB)
 - `crop-overlay.tsx` - Crop area visualization
 
-**UI Utilities (2 files):**
+**UI Utilities (1 file):**
 - `status-bar.tsx` - Bottom info bar
-- `capture-toolbar.tsx` - Top toolbar
 
 ### Types: `types/index.ts`
 

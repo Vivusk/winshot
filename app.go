@@ -18,6 +18,7 @@ import (
 	"golang.org/x/image/webp"
 	"winshot/internal/config"
 	"winshot/internal/hotkeys"
+	"winshot/internal/overlay"
 	"winshot/internal/screenshot"
 	"winshot/internal/tray"
 	winEnum "winshot/internal/windows"
@@ -25,17 +26,19 @@ import (
 
 // App struct
 type App struct {
-	ctx           context.Context
-	hotkeyManager *hotkeys.HotkeyManager
+	ctx              context.Context
+	hotkeyManager    *hotkeys.HotkeyManager
+	overlayManager   *overlay.Manager
 	trayIcon         *tray.TrayIcon
 	config           *config.Config
 	lastWidth        int
 	lastHeight       int
-	preCaptureWidth  int // Window size before capture (protected from resize events)
+	preCaptureWidth  int  // Window size before capture (protected from resize events)
 	preCaptureHeight int
 	preCaptureX      int  // Window X position before capture
 	preCaptureY      int  // Window Y position before capture
 	isCapturing      bool // Flag to prevent resize events during capture
+	isWindowHidden   bool // Track window visibility state
 }
 
 // NewApp creates a new App application struct
@@ -62,11 +65,19 @@ func (a *App) startup(ctx context.Context) {
 	a.registerHotkeysFromConfig()
 	a.hotkeyManager.Start()
 
+	// Initialize overlay manager for native region selection
+	a.overlayManager = overlay.NewManager()
+	if err := a.overlayManager.Start(); err != nil {
+		// Log warning but continue - will fall back to React overlay
+		println("Warning: failed to start overlay manager:", err.Error())
+	}
+
 	// Initialize system tray
 	a.trayIcon = tray.NewTrayIcon("WinShot - Screenshot Tool")
 	a.trayIcon.SetCallback(a.onTrayMenu)
 	a.trayIcon.SetOnShow(func() {
 		runtime.WindowShow(a.ctx)
+		a.isWindowHidden = false
 		runtime.WindowSetAlwaysOnTop(a.ctx, true)
 		runtime.WindowSetAlwaysOnTop(a.ctx, false)
 	})
@@ -90,6 +101,9 @@ func (a *App) shutdown(ctx context.Context) {
 	if a.hotkeyManager != nil {
 		a.hotkeyManager.Stop()
 		a.hotkeyManager.UnregisterAll()
+	}
+	if a.overlayManager != nil {
+		a.overlayManager.Stop()
 	}
 	if a.trayIcon != nil {
 		a.trayIcon.Stop()
@@ -137,6 +151,7 @@ func (a *App) UpdateWindowSize(width, height int) {
 // MinimizeToTray hides the window (minimize to tray)
 func (a *App) MinimizeToTray() {
 	runtime.WindowHide(a.ctx)
+	a.isWindowHidden = true
 }
 
 // OnBeforeClose is called when the window close button is clicked
@@ -145,6 +160,7 @@ func (a *App) OnBeforeClose(ctx context.Context) bool {
 	if a.config != nil && a.config.Startup.CloseToTray {
 		// Hide window instead of closing
 		runtime.WindowHide(ctx)
+		a.isWindowHidden = true
 		return true // Prevent default close
 	}
 	return false // Allow normal close
@@ -171,7 +187,7 @@ type RegionCaptureData struct {
 	DisplayIndex int                       `json:"displayIndex"` // Index of the captured display
 }
 
-// PrepareRegionCapture prepares for region selection by capturing all monitors and setting up overlay
+// PrepareRegionCapture prepares for region selection using native Win32 overlay
 func (a *App) PrepareRegionCapture() (*RegionCaptureData, error) {
 	// Set capturing flag to prevent resize events from overwriting saved size
 	a.isCapturing = true
@@ -194,95 +210,113 @@ func (a *App) PrepareRegionCapture() (*RegionCaptureData, error) {
 		a.preCaptureHeight = 800
 	}
 
-	// Hide the window first so it's not in the screenshot
-	runtime.WindowHide(a.ctx)
+	// Only hide and wait if window is currently visible
+	if !a.isWindowHidden {
+		runtime.WindowHide(a.ctx)
+		a.isWindowHidden = true
+		// Wait for window to fully hide (250ms for DWM compositor)
+		time.Sleep(250 * time.Millisecond)
+	}
 
-	// Wait for window to fully hide (350ms needed for Windows DWM compositor)
-	time.Sleep(350 * time.Millisecond)
+	// Get the virtual screen bounds first
+	screenX, screenY, virtualWidth, virtualHeight := screenshot.GetVirtualScreenBounds()
 
-	// Capture entire virtual screen (all monitors combined)
-	result, err := screenshot.CaptureVirtualScreen()
+	// Capture raw RGBA (faster - no PNG encode)
+	rgbaImg, err := screenshot.CaptureVirtualScreenRaw()
 	if err != nil {
-		// Show window again on error
 		runtime.WindowShow(a.ctx)
+		a.isCapturing = false
 		return nil, err
 	}
 
-	// Get the virtual screen bounds (combined bounds of all monitors)
-	screenX, screenY, virtualWidth, virtualHeight := screenshot.GetVirtualScreenBounds()
-
-	// Calculate logical dimensions - use virtual bounds directly
-	// The screenshot captures at physical pixel resolution
-	logicalWidth := virtualWidth
-	logicalHeight := virtualHeight
-
 	// Calculate scale ratio between physical screenshot and logical window size
-	scaleRatio := float64(result.Width) / float64(logicalWidth)
+	scaleRatio := float64(rgbaImg.Bounds().Dx()) / float64(virtualWidth)
 	if scaleRatio < 1.0 {
 		scaleRatio = 1.0
 	}
 
-	// Position window at the virtual screen origin (can be negative)
-	runtime.WindowSetPosition(a.ctx, screenX, screenY)
+	// Show native overlay and get result channel
+	bounds := image.Rect(screenX, screenY, screenX+virtualWidth, screenY+virtualHeight)
+	resultCh := a.overlayManager.Show(rgbaImg, bounds, scaleRatio)
 
-	// Disable min size constraint temporarily
-	runtime.WindowSetMinSize(a.ctx, 0, 0)
+	// Wait for selection result in goroutine
+	go func() {
+		selResult := <-resultCh
+		if selResult.Cancelled {
+			// User cancelled - just show window
+			runtime.WindowShow(a.ctx)
+			a.isWindowHidden = false
+			a.isCapturing = false
+			return
+		}
 
-	// Set window size to match the virtual desktop dimensions
-	runtime.WindowSetSize(a.ctx, logicalWidth, logicalHeight)
+		// Scale coordinates to physical pixels
+		scaledX := int(float64(selResult.X) * scaleRatio)
+		scaledY := int(float64(selResult.Y) * scaleRatio)
+		scaledW := int(float64(selResult.Width) * scaleRatio)
+		scaledH := int(float64(selResult.Height) * scaleRatio)
 
-	// Make window always on top
-	runtime.WindowSetAlwaysOnTop(a.ctx, true)
+		// Crop to selected region before encoding (much faster - smaller image)
+		croppedImg := rgbaImg.SubImage(image.Rect(scaledX, scaledY, scaledX+scaledW, scaledY+scaledH))
 
-	// Show the window
-	runtime.WindowShow(a.ctx)
+		var buf bytes.Buffer
+		if err := png.Encode(&buf, croppedImg); err != nil {
+			runtime.WindowShow(a.ctx)
+			a.isWindowHidden = false
+			a.isCapturing = false
+			return
+		}
 
+		// Emit cropped image directly - no need for frontend to crop again
+		runtime.EventsEmit(a.ctx, "region:selected", map[string]interface{}{
+			"width":      scaledW,
+			"height":     scaledH,
+			"screenshot": base64.StdEncoding.EncodeToString(buf.Bytes()),
+		})
+	}()
+
+	// Return minimal data (actual selection comes via event)
 	return &RegionCaptureData{
-		Screenshot:   result,
+		Screenshot:   nil, // Not needed - selection via event
 		ScreenX:      screenX,
 		ScreenY:      screenY,
-		Width:        logicalWidth,
-		Height:       logicalHeight,
+		Width:        virtualWidth,
+		Height:       virtualHeight,
 		ScaleRatio:   scaleRatio,
-		PhysicalW:    result.Width,
-		PhysicalH:    result.Height,
-		DisplayIndex: 0, // No longer relevant for multi-monitor
+		PhysicalW:    rgbaImg.Bounds().Dx(),
+		PhysicalH:    rgbaImg.Bounds().Dy(),
+		DisplayIndex: 0,
 	}, nil
+}
+
+// imageToRGBA converts an image.Image to *image.RGBA
+func imageToRGBA(img image.Image) *image.RGBA {
+	if rgba, ok := img.(*image.RGBA); ok {
+		return rgba
+	}
+	bounds := img.Bounds()
+	rgba := image.NewRGBA(bounds)
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			rgba.Set(x, y, img.At(x, y))
+		}
+	}
+	return rgba
 }
 
 // FinishRegionCapture restores the window to normal state after region selection
 func (a *App) FinishRegionCapture() {
-	// Remove always on top
-	runtime.WindowSetAlwaysOnTop(a.ctx, false)
-
-	// Restore min size constraint
-	runtime.WindowSetMinSize(a.ctx, 800, 600)
-
-	// Restore window to the size it was before capture (protected value)
-	width := a.preCaptureWidth
-	height := a.preCaptureHeight
-	if width < 800 || height < 600 {
-		// Fallback to defaults
-		width = 1200
-		height = 800
-	}
-
-	// First restore position, then size to ensure correct placement
-	// This prevents Windows from auto-adjusting position when resizing
-	runtime.WindowSetPosition(a.ctx, a.preCaptureX, a.preCaptureY)
-
-	// Small delay to let Windows process position change
-	time.Sleep(50 * time.Millisecond)
-
-	runtime.WindowSetSize(a.ctx, width, height)
-
-	// Clear capturing flag to allow resize tracking again
+	// Simply show window and clear capturing flag
+	// Native overlay doesn't modify main window, so just show it
+	runtime.WindowShow(a.ctx)
+	a.isWindowHidden = false
 	a.isCapturing = false
 }
 
 // ShowWindow shows the main window
 func (a *App) ShowWindow() {
 	runtime.WindowShow(a.ctx)
+	a.isWindowHidden = false
 	runtime.WindowSetAlwaysOnTop(a.ctx, true)
 	runtime.WindowSetAlwaysOnTop(a.ctx, false)
 }

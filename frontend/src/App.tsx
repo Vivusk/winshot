@@ -3,7 +3,6 @@ import Konva from 'konva';
 import { TitleBar } from './components/title-bar';
 import { CaptureToolbar } from './components/capture-toolbar';
 import { WindowPicker } from './components/window-picker';
-import { RegionSelector } from './components/region-selector';
 import { EditorCanvas } from './components/editor-canvas';
 import { SettingsPanel } from './components/settings-panel';
 import { SettingsModal } from './components/settings-modal';
@@ -15,7 +14,6 @@ import { CaptureResult, CaptureMode, WindowInfo, Annotation, EditorTool, OutputR
 import {
   CaptureFullscreen,
   CaptureWindow,
-  GetDisplayBounds,
   SaveImage,
   QuickSave,
   MinimizeToTray,
@@ -139,10 +137,6 @@ function App() {
   const [screenshot, setScreenshot] = useState<CaptureResult | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [showWindowPicker, setShowWindowPicker] = useState(false);
-  const [showRegionSelector, setShowRegionSelector] = useState(false);
-  const [displayBounds, setDisplayBounds] = useState({ width: 1920, height: 1080 });
-  const [regionScreenshot, setRegionScreenshot] = useState<string | undefined>();
-  const [regionScaleRatio, setRegionScaleRatio] = useState(1);
   const [statusMessage, setStatusMessage] = useState<string | undefined>();
 
   // Editor settings (loaded from localStorage with lazy initialization)
@@ -222,19 +216,13 @@ function App() {
     }
 
     if (mode === 'region') {
-      // Prepare region capture - this will hide window, take screenshot, and make window fullscreen
+      // Native overlay handles region capture - just trigger it
       try {
-        const data = await PrepareRegionCapture();
-        if (!data.screenshot) {
-          throw new Error('No screenshot data received');
-        }
-        setDisplayBounds({ width: data.width, height: data.height });
-        setRegionScreenshot(data.screenshot.data);
-        setRegionScaleRatio(data.scaleRatio || 1);
-        setShowRegionSelector(true);
+        await PrepareRegionCapture();
+        // Selection result comes via 'region:selected' event
       } catch (error) {
-        console.error('Failed to prepare region capture:', error);
-        setStatusMessage('Failed to prepare region capture');
+        console.error('Failed to start region capture:', error);
+        setStatusMessage('Failed to start region capture');
         setTimeout(() => setStatusMessage(undefined), 3000);
       }
       return;
@@ -295,80 +283,23 @@ function App() {
     setIsCapturing(false);
   };
 
-  const handleRegionSelect = async (x: number, y: number, width: number, height: number) => {
-    setShowRegionSelector(false);
-    setIsCapturing(true);
-    setStatusMessage('Capturing region...');
+  // Handle native overlay selection result (already cropped by backend)
+  const handleNativeRegionSelect = useCallback((width: number, height: number, screenshotData: string) => {
+    // Set screenshot directly - already cropped by Go backend
+    setScreenshot({ width, height, data: screenshotData });
 
-    try {
-      // Crop the selected region from the fullscreen screenshot (client-side)
-      if (!regionScreenshot) {
-        throw new Error('No screenshot data available');
-      }
+    // Reset annotations for new capture
+    setAnnotations([]);
+    setSelectedAnnotationId(null);
+    setActiveTool('select');
+    setStatusMessage(undefined);
 
-      // Create an image from the fullscreen screenshot
-      const img = new Image();
-      img.onload = async () => {
-        // Apply DPI scale ratio to get actual pixel coordinates in the screenshot
-        const scale = regionScaleRatio;
-        const scaledX = Math.round(x * scale);
-        const scaledY = Math.round(y * scale);
-        const scaledWidth = Math.round(width * scale);
-        const scaledHeight = Math.round(height * scale);
+    // Restore window to normal state
+    FinishRegionCapture();
 
-        const canvas = document.createElement('canvas');
-        canvas.width = scaledWidth;
-        canvas.height = scaledHeight;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          setStatusMessage('Failed to create canvas context');
-          setIsCapturing(false);
-          return;
-        }
-
-        // Crop the selected region from the high-DPI screenshot
-        ctx.drawImage(img, scaledX, scaledY, scaledWidth, scaledHeight, 0, 0, scaledWidth, scaledHeight);
-
-        // Get the cropped image as base64
-        const croppedData = canvas.toDataURL('image/png').split(',')[1];
-        setScreenshot({
-          width: scaledWidth,
-          height: scaledHeight,
-          data: croppedData,
-        });
-        // Reset annotations for new capture
-        setAnnotations([]);
-        setSelectedAnnotationId(null);
-        setActiveTool('select');
-        setStatusMessage(undefined);
-        setIsCapturing(false);
-
-        // Restore window to normal state
-        FinishRegionCapture();
-        setRegionScreenshot(undefined);
-        setRegionScaleRatio(1);
-
-        // Trigger auto-copy of styled canvas (handled by useEffect)
-        setPendingAutoCopy(true);
-      };
-      img.onerror = () => {
-        setStatusMessage('Failed to load screenshot');
-        setIsCapturing(false);
-        FinishRegionCapture();
-        setRegionScreenshot(undefined);
-        setRegionScaleRatio(1);
-      };
-      img.src = `data:image/png;base64,${regionScreenshot}`;
-    } catch (error) {
-      console.error('Region capture failed:', error);
-      setStatusMessage('Capture failed');
-      setTimeout(() => setStatusMessage(undefined), 3000);
-      setIsCapturing(false);
-      FinishRegionCapture();
-      setRegionScreenshot(undefined);
-      setRegionScaleRatio(1);
-    }
-  };
+    // Trigger auto-copy of styled canvas (handled by useEffect)
+    setPendingAutoCopy(true);
+  }, []);
 
   const handleClear = () => {
     setScreenshot(null);
@@ -455,25 +386,19 @@ function App() {
     }
   }, []);
 
-  // Listen for global hotkey events from backend
+  // Listen for global hotkey events and native overlay events from backend
   useEffect(() => {
     const handleFullscreen = () => {
       handleCapture('fullscreen');
     };
     const handleRegion = async () => {
-      // Prepare region capture - this will hide window, take screenshot, and make window fullscreen
+      // Native overlay handles region capture - just trigger it
       try {
-        const data = await PrepareRegionCapture();
-        if (!data.screenshot) {
-          throw new Error('No screenshot data received');
-        }
-        setDisplayBounds({ width: data.width, height: data.height });
-        setRegionScreenshot(data.screenshot.data);
-        setRegionScaleRatio(data.scaleRatio || 1);
-        setShowRegionSelector(true);
+        await PrepareRegionCapture();
+        // Selection result comes via 'region:selected' event
       } catch (error) {
-        console.error('Failed to prepare region capture:', error);
-        setStatusMessage('Failed to prepare region capture');
+        console.error('Failed to start region capture:', error);
+        setStatusMessage('Failed to start region capture');
         setTimeout(() => setStatusMessage(undefined), 3000);
       }
     };
@@ -481,16 +406,27 @@ function App() {
       setShowWindowPicker(true);
     };
 
+    // Handle native overlay selection result (already cropped)
+    const handleRegionSelected = (data: {
+      width: number;
+      height: number;
+      screenshot: string;
+    }) => {
+      handleNativeRegionSelect(data.width, data.height, data.screenshot);
+    };
+
     EventsOn('hotkey:fullscreen', handleFullscreen);
     EventsOn('hotkey:region', handleRegion);
     EventsOn('hotkey:window', handleWindow);
+    EventsOn('region:selected', handleRegionSelected);
 
     return () => {
       EventsOff('hotkey:fullscreen');
       EventsOff('hotkey:region');
       EventsOff('hotkey:window');
+      EventsOff('region:selected');
     };
-  }, [handleCapture]);
+  }, [handleCapture, handleNativeRegionSelect]);
 
   // Handle minimize to tray
   const handleMinimizeToTray = useCallback(() => {
@@ -1189,20 +1125,6 @@ function App() {
         isOpen={showWindowPicker}
         onClose={() => setShowWindowPicker(false)}
         onSelect={handleWindowSelect}
-      />
-
-      <RegionSelector
-        isOpen={showRegionSelector}
-        onClose={() => {
-          setShowRegionSelector(false);
-          FinishRegionCapture();
-          setRegionScreenshot(undefined);
-          setRegionScaleRatio(1);
-        }}
-        onSelect={handleRegionSelect}
-        screenWidth={displayBounds.width}
-        screenHeight={displayBounds.height}
-        screenshotData={regionScreenshot}
       />
 
       <SettingsModal

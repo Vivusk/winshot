@@ -105,6 +105,13 @@ func CaptureVirtualScreen() (*CaptureResult, error) {
 	return CaptureRegion(x, y, w, h)
 }
 
+// CaptureVirtualScreenRaw captures the entire virtual desktop and returns raw RGBA image
+// This is faster than CaptureVirtualScreen as it skips PNG encoding
+func CaptureVirtualScreenRaw() (*image.RGBA, error) {
+	x, y, w, h := GetVirtualScreenBounds()
+	return screenshot.Capture(x, y, w, h)
+}
+
 // encodeImage converts an image to base64 PNG
 func encodeImage(img *image.RGBA) (*CaptureResult, error) {
 	var buf bytes.Buffer
